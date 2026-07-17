@@ -1,0 +1,412 @@
+{
+    "_comment": "Habitability scoring parameters and biochemistry type definitions. Weights are multiplied (product), not summed - any zero kills the score.",
+    "scoring": {
+        "_comment": "Each subscore maps an input value to 0.0-1.0. optimal_min/max = score 1.0, viable_min/max = score tapers to 0.0, outside viable = 0.0",
+        "temperature": {
+            "weight": 1.0,
+            "_comment": "Temperature scoring is biochemistry-dependent - see biochemistry_types. This weight scales the best-matching biochemistry temp subscore."
+        },
+        "atmosphere": {
+            "weight": 0.9,
+            "_comment": "Scored by presence/fraction of required gases for the matched biochemistry. See biochemistry_types for gas requirements."
+        },
+        "pressure": {
+            "weight": 0.85,
+            "viable_min": 0.006,
+            "viable_max": 100.0,
+            "optimal_min": 0.5,
+            "optimal_max": 5.0,
+            "unit": "atm",
+            "_comment": "Below 0.006 atm (triple point of water) no liquid possible. Above 100 atm biochemistry severely constrained."
+        },
+        "gravity": {
+            "weight": 0.5,
+            "viable_min": 0.5,
+            "viable_max": 25.0,
+            "optimal_min": 3.0,
+            "optimal_max": 12.0,
+            "unit": "m/s^2",
+            "_comment": "Affects organism morphology. Very low = no atmosphere retention, very high = limits complexity."
+        },
+        "magnetic_shielding": {
+            "weight": 0.7,
+            "viable_min": 0.05,
+            "viable_max": 3.0,
+            "optimal_min": 0.3,
+            "optimal_max": 1.5,
+            "unit": "dynamo_factor",
+            "_comment": "Below threshold stellar radiation sterilizes surface. Subsurface life possible but not modeled."
+        },
+        "liquid_surface": {
+            "weight": 0.8,
+            "viable_min": 0.0,
+            "viable_max": 1.0,
+            "optimal_min": 0.15,
+            "optimal_max": 0.85,
+            "unit": "fraction",
+            "_comment": "Ocean coverage. Zero is survivable (subsurface aquifers) but heavily penalized."
+        },
+        "stellar_radiation": {
+            "weight": 0.6,
+            "viable_min": 50,
+            "viable_max": 5000,
+            "optimal_min": 200,
+            "optimal_max": 2000,
+            "unit": "W/m^2",
+            "_comment": "Too low = insufficient energy for photosynthesis. Too high = UV sterilization."
+        },
+        "tidal_energy": {
+            "weight": 0.6,
+            "viable_min": 0.1,
+            "viable_max": 50000,
+            "optimal_min": 0.5,
+            "optimal_max": 500,
+            "unit": "W/m^2",
+            "_comment": "Tidal heat flux as alternative energy source for chemolithotrophic life. Replaces stellar_radiation in energy score when tidal flux is the dominant energy source. Optimal range covers Io-like heating down to Earth internal flux levels. Upper viable bound well below tidal disruption ceiling (1e5 W/m\u00b2)."
+        },
+        "tidal_energy_gate": {
+            "min_flux": 1.0,
+            "unit": "W/m^2",
+            "_comment": "Minimum tidal flux (W/m\u00b2) required for tidal energy score to substitute for stellar radiation in the energy subscore. Below this threshold the body is too tidally inactive to support chemolithotrophic metabolism. Reference: Earth internal heat flux ~0.09 W/m\u00b2, Io ~2 W/m\u00b2."
+        }
+    },
+    "biochemistry_types": {
+        "_comment": "Each type defines viable conditions. The system tests all types and selects the best-scoring match.",
+        "water_carbon": {
+            "label": "Water/Carbon",
+            "description": "Earth-like life using water as solvent and carbon as structural backbone",
+            "solvent": "H2O",
+            "temperature": {
+                "viable_min": -20,
+                "viable_max": 150,
+                "optimal_min": 5,
+                "optimal_max": 45,
+                "unit": "C"
+            },
+            "required_gases": {
+                "_comment": "Each gas has a minimum fraction to be considered present and a weight for scoring",
+                "N2": {
+                    "min_fraction": 0.01,
+                    "weight": 0.3,
+                    "role": "nitrogen fixation, amino acid synthesis"
+                },
+                "CO2": {
+                    "min_fraction": 0.001,
+                    "weight": 0.25,
+                    "role": "carbon source for autotrophs"
+                },
+                "H2O": {
+                    "min_fraction": 0.005,
+                    "weight": 0.3,
+                    "role": "solvent, hydrological cycle"
+                },
+                "O2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.15,
+                    "role": "aerobic metabolism, not required for anaerobic life"
+                }
+            },
+            "pressure": {
+                "viable_min": 0.006,
+                "viable_max": 100,
+                "optimal_min": 0.5,
+                "optimal_max": 5.0,
+                "unit": "atm"
+            },
+            "complexity_potential": 1.0,
+            "_comment_complexity": "Water/carbon has the highest potential for complex life"
+        },
+        "ammonia_carbon": {
+            "label": "Ammonia/Carbon",
+            "description": "Life using ammonia as solvent - viable at temperatures too cold for liquid water",
+            "solvent": "NH3",
+            "temperature": {
+                "viable_min": -80,
+                "viable_max": -25,
+                "optimal_min": -60,
+                "optimal_max": -35,
+                "unit": "C"
+            },
+            "required_gases": {
+                "NH3": {
+                    "min_fraction": 0.02,
+                    "weight": 0.4,
+                    "role": "solvent and nitrogen source"
+                },
+                "N2": {
+                    "min_fraction": 0.01,
+                    "weight": 0.2,
+                    "role": "atmospheric buffer"
+                },
+                "CH4": {
+                    "min_fraction": 0.01,
+                    "weight": 0.2,
+                    "role": "carbon source"
+                },
+                "H2O": {
+                    "min_fraction": 0.0,
+                    "weight": 0.1,
+                    "role": "secondary solvent, ice matrix"
+                },
+                "CO2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.1,
+                    "role": "carbon source"
+                }
+            },
+            "pressure": {
+                "viable_min": 0.1,
+                "viable_max": 50,
+                "optimal_min": 1.0,
+                "optimal_max": 10.0,
+                "unit": "atm"
+            },
+            "complexity_potential": 0.6,
+            "_comment_complexity": "Ammonia biochemistry is theorized but likely limits complexity vs water"
+        },
+        "methane_carbon": {
+            "label": "Methane/Carbon",
+            "description": "Titan-like life using liquid methane/ethane as solvent at cryogenic temperatures",
+            "solvent": "CH4",
+            "temperature": {
+                "viable_min": -185,
+                "viable_max": -140,
+                "optimal_min": -175,
+                "optimal_max": -155,
+                "unit": "C"
+            },
+            "required_gases": {
+                "CH4": {
+                    "min_fraction": 0.05,
+                    "weight": 0.5,
+                    "role": "solvent and energy source"
+                },
+                "N2": {
+                    "min_fraction": 0.01,
+                    "weight": 0.2,
+                    "role": "atmospheric buffer, nitrogen source"
+                },
+                "H2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.15,
+                    "role": "energy carrier"
+                },
+                "CO2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.15,
+                    "role": "carbon source"
+                }
+            },
+            "pressure": {
+                "viable_min": 0.5,
+                "viable_max": 20,
+                "optimal_min": 1.0,
+                "optimal_max": 5.0,
+                "unit": "atm"
+            },
+            "complexity_potential": 0.3,
+            "_comment_complexity": "Extremely slow metabolism at cryogenic temps severely limits complexity"
+        },
+        "thermophilic_water": {
+            "label": "Thermophilic",
+            "description": "Extremophile life in superheated water kept liquid by high pressure - deep-sea vent analogue",
+            "solvent": "H2O",
+            "temperature": {
+                "viable_min": 80,
+                "viable_max": 200,
+                "optimal_min": 100,
+                "optimal_max": 150,
+                "unit": "C"
+            },
+            "required_gases": {
+                "H2O": {
+                    "min_fraction": 0.01,
+                    "weight": 0.3,
+                    "role": "solvent under high pressure"
+                },
+                "CO2": {
+                    "min_fraction": 0.01,
+                    "weight": 0.3,
+                    "role": "carbon/energy source for chemotrophs"
+                },
+                "SO2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.2,
+                    "role": "sulfur metabolism energy source"
+                },
+                "N2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.2,
+                    "role": "nitrogen source"
+                }
+            },
+            "pressure": {
+                "viable_min": 2.0,
+                "viable_max": 100,
+                "optimal_min": 5.0,
+                "optimal_max": 50.0,
+                "unit": "atm",
+                "_comment": "High pressure required to keep water liquid above 100C"
+            },
+            "complexity_potential": 0.4,
+            "_comment_complexity": "Extremophile conditions limit multicellular development"
+        },
+        "chemolithotrophic": {
+            "label": "Chemolithotrophic",
+            "description": "Life deriving energy from chemical reactions \u2014 volcanic outgassing, hydrothermal gradients, sulfur/iron cycling. No sunlight required. Analogous to deep-sea vent ecosystems on Earth.",
+            "solvent": "H2O",
+            "energy_source": "tidal",
+            "_comment_energy": "Flags this type as tidal-energy-dependent. Scored using tidal_energy subscore rather than stellar_radiation when tidal flux >= tidal_energy_gate.min_flux.",
+            "temperature": {
+                "viable_min": -20,
+                "viable_max": 200,
+                "optimal_min": 20,
+                "optimal_max": 120,
+                "unit": "C",
+                "_comment": "Broad range covering psychrophilic to hyperthermophilic organisms. Upper end reflects known vent organisms surviving above 120C under pressure."
+            },
+            "required_gases": {
+                "_comment": "Electron donors and acceptors proxied through atmospheric composition.",
+                "SO2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.3,
+                    "role": "sulfur compounds as electron donor \u2014 volcanic outgassing indicator"
+                },
+                "CO2": {
+                    "min_fraction": 0.01,
+                    "weight": 0.25,
+                    "role": "carbon source for autotrophic fixation"
+                },
+                "H2O": {
+                    "min_fraction": 0.01,
+                    "weight": 0.25,
+                    "role": "solvent and hydrogen source"
+                },
+                "N2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.1,
+                    "role": "nitrogen source for amino acid synthesis"
+                },
+                "H2": {
+                    "min_fraction": 0.0,
+                    "weight": 0.1,
+                    "role": "hydrogen as primary electron donor"
+                }
+            },
+            "pressure": {
+                "viable_min": 0.006,
+                "viable_max": 100,
+                "optimal_min": 0.1,
+                "optimal_max": 10.0,
+                "unit": "atm",
+                "_comment": "Lower optimal minimum than water/carbon \u2014 vent organisms can thrive at lower surface pressures if liquid water exists locally under pressure."
+            },
+            "complexity_potential": 0.2,
+            "_comment_complexity": "Energy-limited metabolism and absence of photosynthetic base constrains ecosystem complexity. Microbial and simple multicellular at best."
+        }
+    },
+    "biosphere_tiers": {
+        "_comment": "Habitability score thresholds that determine biosphere complexity. Final score = habitability_index * biochemistry.complexity_potential.",
+        "lifeless": {
+            "max_score": 0.1,
+            "description": "No life - conditions too hostile for any known biochemistry",
+            "max_phyla": 0,
+            "max_trophic_levels": 0
+        },
+        "prebiotic": {
+            "max_score": 0.2,
+            "description": "Complex organic chemistry but no self-replicating life",
+            "max_phyla": 0,
+            "max_trophic_levels": 0
+        },
+        "microbial": {
+            "max_score": 0.4,
+            "description": "Single-celled organisms - prokaryote equivalents, biofilms, extremophiles",
+            "max_phyla": 3,
+            "max_trophic_levels": 2,
+            "example_niches": [
+                "chemotrophs",
+                "phototrophs",
+                "lithotrophs"
+            ]
+        },
+        "simple_multicellular": {
+            "max_score": 0.6,
+            "description": "Colonial and simple multicellular life - algae, fungi, sponge equivalents",
+            "max_phyla": 6,
+            "max_trophic_levels": 3,
+            "example_niches": [
+                "producers",
+                "grazers",
+                "decomposers",
+                "filter_feeders"
+            ]
+        },
+        "complex_multicellular": {
+            "max_score": 0.8,
+            "description": "Differentiated organisms with organs, nervous systems - plant/animal equivalents",
+            "max_phyla": 12,
+            "max_trophic_levels": 4,
+            "example_niches": [
+                "producers",
+                "herbivores",
+                "carnivores",
+                "omnivores",
+                "decomposers",
+                "parasites"
+            ]
+        },
+        "advanced": {
+            "max_score": 1.0,
+            "description": "Potential for tool use, social structures, or sapience",
+            "max_phyla": 20,
+            "max_trophic_levels": 5,
+            "example_niches": [
+                "producers",
+                "herbivores",
+                "carnivores",
+                "apex_predators",
+                "omnivores",
+                "decomposers",
+                "parasites",
+                "symbionts"
+            ]
+        }
+    },
+    "no_life_override": {
+        "_comment": "Hard cutoffs that force habitability to 0 regardless of other scores",
+        "conditions": [
+            {
+                "field": "body_type",
+                "operator": "equals",
+                "value": "giant",
+                "reason": "No solid surface for life"
+            },
+            {
+                "field": "has_atmosphere",
+                "operator": "equals",
+                "value": false,
+                "reason": "No atmosphere - no chemistry platform"
+            },
+            {
+                "field": "surface_pressure",
+                "operator": "less_than",
+                "value": 0.001,
+                "reason": "Pressure below triple point of any viable solvent"
+            },
+            {
+                "field": "surface_temperature",
+                "operator": "greater_than",
+                "value": 250,
+                "reason": "Above thermal decomposition of all known biomolecules"
+            },
+            {
+                "field": "surface_temperature",
+                "operator": "less_than",
+                "value": -200,
+                "reason": "Below minimum for any theorized biochemistry"
+            }
+        ],
+        "_comment_tidal": "Tidal atmosphere gate (moons.py): minimum 0.05 Me required for tidal outgassing to sustain atmosphere. Below this Jeans escape strips outgassed material regardless of flux."
+    }
+}

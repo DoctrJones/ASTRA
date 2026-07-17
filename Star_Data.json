@@ -1,0 +1,184 @@
+{
+    "O": [
+        {
+            "class": "O",
+            "color": "blue",
+            "temperature_max": 50000.0,
+            "temperature_min": 33000.0,
+            "Mo_max": 32.0,
+            "Mo_min": 16.0,
+            "Ro_max": 12.0,
+            "Ro_min": 6.0,
+            "Lo_max": 60000.0,
+            "Lo_min": 30000.0,
+            "percent": 0.00003,
+            "feh_min": -0.5,
+            "feh_max": 0.5,
+            "feh_mean": 0.0,
+            "feh_sigma": 0.2,
+            "lambda" : 0.5,
+            "body_mass_scale": 1.30,
+            "zone_weights": {
+                "rocky": 0.1,
+                "giant": 0.5,
+                "outer": 0.4
+            }
+        }
+    ],
+    "B": [
+        {
+            "class": "B",
+            "color": "bluish white",
+            "temperature_max": 33000.0,
+            "temperature_min": 10000.0,
+            "Mo_max": 16.0,
+            "Mo_min": 2.1,
+            "Ro_max": 6.6,
+            "Ro_min": 1.8,
+            "Lo_max": 30000.0,
+            "Lo_min": 25.0,
+            "percent": 0.12,
+            "feh_min": -0.5,
+            "feh_max": 0.5,
+            "feh_mean": 0.0,
+            "feh_sigma": 0.2,
+            "lambda" : 1.0,
+            "body_mass_scale": 1.25,
+            "zone_weights": {
+                "rocky": 0.2,
+                "giant": 0.5,
+                "outer": 0.3
+            }
+        }
+    ],
+    "A": [
+        {
+            "class": "A",
+            "color": "white",
+            "temperature_max": 10000.0,
+            "temperature_min": 7300.0,
+            "Mo_max": 2.1,
+            "Mo_min": 1.4,
+            "Ro_max": 1.8,
+            "Ro_min": 1.4,
+            "Lo_max": 25.0,
+            "Lo_min": 5.0,
+            "percent": 0.61,
+            "feh_min": -0.7,
+            "feh_max": 0.5,
+            "feh_mean": -0.1,
+            "feh_sigma": 0.25,
+            "lambda" : 2.0,
+            "body_mass_scale": 1.15,
+            "zone_weights": {
+                "rocky": 0.3,
+                "giant": 0.5,
+                "outer": 0.2
+            }
+        }
+    ],
+    "F": [
+        {
+            "class": "F",
+            "color": "yellowish white",
+            "temperature_max": 7300.0,
+            "temperature_min": 6000.0,
+            "Mo_max": 1.4,
+            "Mo_min": 1.04,
+            "Ro_max": 1.4,
+            "Ro_min": 1.15,
+            "Lo_max": 5.0,
+            "Lo_min": 1.5,
+            "percent": 3.0,
+            "feh_min": -1.0,
+            "feh_max": 0.5,
+            "feh_mean": -0.1,
+            "feh_sigma": 0.3,
+            "lambda" : 3.0,
+            "body_mass_scale": 1.08,
+            "zone_weights": {
+                "rocky": 0.4,
+                "giant": 0.4,
+                "outer": 0.2
+            }
+        }
+    ],
+    "G": [
+        {
+            "class": "G",
+            "color": "yellow",
+            "temperature_max": 6000,
+            "temperature_min": 5300,
+            "Mo_max": 1.04,
+            "Mo_min": 0.8,
+            "Ro_max": 1.15,
+            "Ro_min": 0.96,
+            "Lo_max": 1.5,
+            "Lo_min": 0.6,
+            "percent": 7.6,
+            "feh_min": -2.0,
+            "feh_max": 0.5,
+            "feh_mean": -0.2,
+            "feh_sigma": 0.4,
+            "lambda" : 4.0,
+            "body_mass_scale": 1.00,
+            "zone_weights": {
+                "rocky": 0.5,
+                "giant": 0.35,
+                "outer": 0.15
+            }
+        }
+    ],
+    "K": [
+        {
+            "class": "K",
+            "color": "light orange",
+            "temperature_max": 5300,
+            "temperature_min": 3900,
+            "Mo_max": 0.8,
+            "Mo_min": 0.45,
+            "Ro_max": 0.96,
+            "Ro_min": 0.7,
+            "Lo_max": 0.6,
+            "Lo_min": 0.08,
+            "percent": 12.0,
+            "feh_min": -2.5,
+            "feh_max": 0.5,
+            "feh_mean": -0.3,
+            "feh_sigma": 0.4,
+            "lambda" : 5.0,
+            "body_mass_scale": 0.90,
+            "zone_weights": {
+                "rocky": 0.55,
+                "giant": 0.3,
+                "outer": 0.15
+            }
+        }
+    ],
+    "M": [
+        {
+            "class": "M",
+            "color": "orangish red",
+            "temperature_max": 3900,
+            "temperature_min": 2300,
+            "Mo_max": 0.45,
+            "Mo_min": 0.08,
+            "Ro_max": 0.7,
+            "Ro_min": 0.15,
+            "Lo_max": 0.08,
+            "Lo_min": 0.01,
+            "percent": 76.0,
+            "feh_min": -2.5,
+            "feh_max": 0.5,
+            "feh_mean": -0.2,
+            "feh_sigma": 0.35,
+            "lambda" : 4,
+            "body_mass_scale": 0.80,
+            "zone_weights": {
+                "rocky": 0.6,
+                "giant": 0.25,
+                "outer": 0.15
+            }
+        }
+    ]
+}

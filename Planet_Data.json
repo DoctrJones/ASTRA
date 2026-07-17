@@ -1,0 +1,207 @@
+{
+    "_comment": "M_E refers to Earth Masses, 5.972E24 kg. R_E refers to Earth Radius, 6371 km",
+    "_comment_moon_threshold": "Moons >= this mass run the full planetary pipeline (core, full atmosphere, full tectonics, full habitability).",
+    "moon_planetary_threshold": 0.5,
+    "rocky": [
+        {
+            "class": "terrestrial",
+            "_comment_mass": "Sub-Earth (< 0.1 Me) is treated as the low end of this class, not a separate subclass.",
+            "M_E_min": 0.1,
+            "M_E_max": 2.0,
+            "R_E_min": 0.3,
+            "R_E_max": 1.25,
+            "density_mean": 5.5,
+            "density_sigma": 0.8,
+            "habitability_bias": 0.8,
+            "placement_zone": "inner",
+            "_comment_moon": "Terrestrial bodies rarely have moons. 0-1 with low probability.",
+            "moon_count_range": [
+                0,
+                1
+            ],
+            "_comment_stripping": "Stellar stripping modifier \u2014 sub-Earths (< 0.1 Me) are more vulnerable.",
+            "sub_earth_threshold": 0.1,
+            "sub_earth_strip_bonus": 0.3,
+            "_comment_tidal": "Rocky body moons are rocky by default \u2014 small captured bodies or impact debris.",
+            "tidal_params": {
+                "rocky_moon": {
+                    "k2": 0.3,
+                    "Q_min": 10,
+                    "Q_max": 500,
+                    "density_mean": 3.2,
+                    "density_sigma": 0.4
+                }
+            },
+            "moon_ice_line_fraction": null
+        },
+        {
+            "class": "super_earth",
+            "_comment_mass": "Above 2 Me gravity regime shifts meaningfully. Upper bound 10 Me \u2014 above that giants dominate.",
+            "M_E_min": 2.0,
+            "M_E_max": 10.0,
+            "R_E_min": 1.25,
+            "R_E_max": 2.0,
+            "density_mean": 6.5,
+            "density_sigma": 0.8,
+            "habitability_bias": 0.5,
+            "placement_zone": "inner",
+            "_comment_moon": "Super-Earths can capture or retain small moons.",
+            "moon_count_range": [
+                0,
+                2
+            ],
+            "_comment_amf": "Super-Earths have stronger outgassing \u2014 boost atmosphere mass fraction.",
+            "amf_multiplier": 1.4,
+            "_comment_volcanic": "Higher internal heat \u2014 nudge volcanic activity up one tier.",
+            "volcanic_boost": true,
+            "_comment_tidal": "Rocky body moons are rocky by default \u2014 small captured bodies or impact debris.",
+            "tidal_params": {
+                "rocky_moon": {
+                    "k2": 0.3,
+                    "Q_min": 10,
+                    "Q_max": 500,
+                    "density_mean": 3.2,
+                    "density_sigma": 0.4
+                }
+            },
+            "moon_ice_line_fraction": null
+        }
+    ],
+    "giant": [
+        {
+            "class": "gas_giant",
+            "_comment_mass": "Saturn ~95 Me, Jupiter ~318 Me. Lower bound closes the 30-95 Me gap with ice_giant.",
+            "M_E_min": 95.0,
+            "M_E_max": 318.0,
+            "R_E_min": 10.0,
+            "R_E_max": 15.0,
+            "density_mean": 1.3,
+            "density_sigma": 0.4,
+            "habitability_bias": 0.0,
+            "placement_zone": "outer",
+            "_comment_gas_table": "Weights are relative, not fractions. H2-dominant per real gas giant composition. Fixes He/H2 inversion bug.",
+            "gas_table_weights": {
+                "H2": 2.5,
+                "He": 0.8,
+                "CH4": 0.1,
+                "NH3": 0.08,
+                "H2O": 0.06
+            },
+            "_comment_dynamo": "Gas giants have deep metallic hydrogen layers driving strong dynamos.",
+            "dynamo_range": [
+                1.8,
+                3.0
+            ],
+            "_comment_moon": "Gas giant moon counts: Jovian-class up to 12, Saturn-class toward lower end of range.",
+            "moon_count_range": [
+                4,
+                12
+            ],
+            "_comment_tidal": "k2 = Love number (interior deformability). Q = tidal dissipation factor (efficiency of heat conversion). Rocky moons dissipate efficiently, icy moons poorly but insulate subsurface oceans.",
+            "tidal_params": {
+                "rocky_moon": {
+                    "_comment": "Io-like. Low Q = efficient dissipation = high heat output.",
+                    "k2": 0.3,
+                    "Q_min": 10,
+                    "Q_max": 500,
+                    "density_mean": 3.5,
+                    "density_sigma": 0.5
+                },
+                "icy_moon": {
+                    "_comment": "Europa/Ganymede-like. High Q = inefficient dissipation but ice insulates subsurface ocean.",
+                    "k2": 0.02,
+                    "Q_min": 1000,
+                    "Q_max": 100000,
+                    "density_mean": 1.8,
+                    "density_sigma": 0.3
+                }
+            },
+            "_comment_ice_line_proxy": "Moon type threshold: moons within this fraction of parent SMA are rocky, beyond are icy. Mirrors planetary ice line logic.",
+            "moon_ice_line_fraction": 0.015
+        },
+        {
+            "class": "ice_giant",
+            "_comment_mass": "Uranus ~14.5 Me, Neptune ~17 Me. Upper bound 95 Me closes the gap with gas_giant lower bound.",
+            "M_E_min": 10.0,
+            "M_E_max": 95.0,
+            "R_E_min": 3.0,
+            "R_E_max": 6.0,
+            "density_mean": 1.6,
+            "density_sigma": 0.3,
+            "habitability_bias": 0.0,
+            "placement_zone": "outer",
+            "_comment_gas_table": "Ice giants are water/methane/ammonia mantle bodies with thin H2/He envelope. CH4 gives Uranus/Neptune blue-green color.",
+            "gas_table_weights": {
+                "H2": 0.4,
+                "He": 0.2,
+                "CH4": 0.6,
+                "NH3": 0.25,
+                "H2O": 0.5
+            },
+            "_comment_dynamo": "Ice giants have weaker, less organised dynamos than gas giants \u2014 Uranus/Neptune both irregular.",
+            "dynamo_range": [
+                1.2,
+                2.2
+            ],
+            "_comment_moon": "Ice giants have fewer and smaller moons than gas giants.",
+            "moon_count_range": [
+                2,
+                8
+            ],
+            "_comment_tidal": "k2 = Love number (interior deformability). Q = tidal dissipation factor (efficiency of heat conversion). Rocky moons dissipate efficiently, icy moons poorly but insulate subsurface oceans.",
+            "tidal_params": {
+                "rocky_moon": {
+                    "_comment": "Io-like. Low Q = efficient dissipation = high heat output.",
+                    "k2": 0.3,
+                    "Q_min": 10,
+                    "Q_max": 500,
+                    "density_mean": 3.5,
+                    "density_sigma": 0.5
+                },
+                "icy_moon": {
+                    "_comment": "Europa/Ganymede-like. High Q = inefficient dissipation but ice insulates subsurface ocean.",
+                    "k2": 0.02,
+                    "Q_min": 1000,
+                    "Q_max": 100000,
+                    "density_mean": 1.8,
+                    "density_sigma": 0.3
+                }
+            },
+            "_comment_ice_line_proxy": "Moon type threshold: moons within this fraction of parent SMA are rocky, beyond are icy. Mirrors planetary ice line logic.",
+            "moon_ice_line_fraction": 0.015
+        }
+    ],
+    "dwarf": [
+        {
+            "class": "icy_dwarf",
+            "M_E_min": 0.0001,
+            "M_E_max": 0.01,
+            "R_E_min": 0.05,
+            "R_E_max": 0.3,
+            "density_mean": 2.0,
+            "density_sigma": 0.5,
+            "atmosphere_types": [
+                "none",
+                "thin methane",
+                "sublimation"
+            ],
+            "habitability_bias": 0.0,
+            "placement_zone": "outer"
+        },
+        {
+            "class": "rocky_dwarf",
+            "M_E_min": 0.0001,
+            "M_E_max": 0.05,
+            "R_E_min": 0.05,
+            "R_E_max": 0.5,
+            "density_mean": 3.0,
+            "density_sigma": 0.8,
+            "atmosphere_types": [
+                "none",
+                "thin"
+            ],
+            "habitability_bias": 0.0,
+            "placement_zone": "inner_belt"
+        }
+    ]
+}
