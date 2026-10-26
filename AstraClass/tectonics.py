@@ -1,35 +1,41 @@
-import random, math
+import json, random, math
+
+with open("Model_Data.json", "r") as f:
+    Model = json.load(f)["tectonics"]
 
 def TectonicActivity(Dynamo_Factor, Body_Mass, Body_Type):
     if Body_Type == "giant":
         return "None"
-    activity_score = Dynamo_Factor * 0.6 + min(Body_Mass, 3.0) * 0.4
-    if activity_score >= 0.4:
+    act = Model["activity"]
+    activity_score = Dynamo_Factor * act["dynamo_weight"] + min(Body_Mass, act["mass_cap"]) * act["mass_weight"]
+    if activity_score >= act["active_min"]:
         return "Active"
-    elif activity_score >= 0.2:
+    elif activity_score >= act["dormant_min"]:
         return "Dormant"
     else:
         return "Dead"
 
 def TectonicPlateCount(key, Dynamo_Factor, Body_Mass, Rotational_Period, index):
     random.seed(key + str(index) + "plates")
-    base = 4 + int(6 * min(Dynamo_Factor, 1.5))
-    spin_factor = 24.0 / max(Rotational_Period, 1.0)
-    spin_bonus = int(min(spin_factor, 6.0) * 0.5)
-    mass_bonus = int(2.0 * min(Body_Mass, 5.0))
-    count = base + spin_bonus + mass_bonus + random.randint(-1, 2)
-    return max(3, min(count, 25))
+    pl = Model["plates"]
+    base = pl["base"] + int(pl["dynamo_scale"] * min(Dynamo_Factor, pl["dynamo_cap"]))
+    spin_factor = pl["spin_reference_hours"] / max(Rotational_Period, pl["min_period_hours"])
+    spin_bonus = int(min(spin_factor, pl["spin_cap"]) * pl["spin_weight"])
+    mass_bonus = int(pl["mass_scale"] * min(Body_Mass, pl["mass_cap"]))
+    count = base + spin_bonus + mass_bonus + random.randint(*pl["jitter"])
+    return max(pl["range"][0], min(count, pl["range"][1]))
 
 def TectonicMaxElevation(Body_SurfaceGravity):
     earth_g = 9.81
-    earth_max = 10.0  # km
+    earth_max = Model["relief"]["earth_max_elevation_km"]
     return round(earth_max * (earth_g / Body_SurfaceGravity), 2)
 
 def TectonicMaxDepth(Max_Elevation):
-    return round(-Max_Elevation * 0.55, 2)
+    return round(-Max_Elevation * Model["relief"]["depth_ratio"], 2)
 
 def TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index):
     random.seed(key + str(index) + "ocean")
+    oc = Model["ocean"]
     if Body_Type == "giant" or Atmo_Composition is None:
         return 0.0
     h2o_frac = 0.0
@@ -37,35 +43,37 @@ def TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pr
         if formula == "H₂O":
             h2o_frac = data["value"]
             break
-    if h2o_frac < 0.01:
+    if h2o_frac < oc["min_h2o_fraction"]:
         return 0.0
-    if Surface_Pressure > 0.006:
-        boiling_point = 100 + 28 * math.log10(max(Surface_Pressure, 0.01))
+    if Surface_Pressure > oc["min_pressure"]:
+        boiling_point = oc["boiling_base_c"] + oc["boiling_per_decade_c"] * math.log10(max(Surface_Pressure, oc["boiling_pressure_floor"]))
         if 0 < Surface_Temperature < boiling_point:
-            temp_factor = 1.0 - (Surface_Temperature / boiling_point) * 0.5
-            base_coverage = h2o_frac * temp_factor * 3.0
-            coverage = base_coverage * random.uniform(0.6, 1.4)
-            return round(max(0.05, min(coverage, 0.95)), 3)
+            temp_factor = 1.0 - (Surface_Temperature / boiling_point) * oc["temperature_factor"]
+            base_coverage = h2o_frac * temp_factor * oc["coverage_scale"]
+            coverage = base_coverage * random.uniform(*oc["jitter"])
+            return round(max(oc["range"][0], min(coverage, oc["range"][1])), 3)
     ch4_frac = 0.0
     for formula, data in Atmo_Composition.items():
         if formula == "CH₄":
             ch4_frac = data["value"]
             break
-    if ch4_frac > 0.05 and Surface_Temperature < -140:
-        coverage = ch4_frac * random.uniform(0.3, 1.0)
-        return round(max(0.01, min(coverage, 0.4)), 3)
+    meth = oc["methane"]
+    if ch4_frac > meth["min_fraction"] and Surface_Temperature < meth["max_temperature_c"]:
+        coverage = ch4_frac * random.uniform(*meth["jitter"])
+        return round(max(meth["range"][0], min(coverage, meth["range"][1])), 3)
     return 0.0
 
 def TectonicVolcanicActivity(Dynamo_Factor, Body_Mass, Body_SMA):
+    vol = Model["volcanic"]
     tidal_factor = 0.0
-    if Body_SMA < 0.2:
-        tidal_factor = 0.3 * (1.0 - Body_SMA / 0.2)
-    volcanic_score = Dynamo_Factor * 0.5 + min(Body_Mass, 2.0) * 0.2 + tidal_factor
-    if volcanic_score >= 0.5:
+    if Body_SMA < vol["tidal_sma_au"]:
+        tidal_factor = vol["tidal_max"] * (1.0 - Body_SMA / vol["tidal_sma_au"])
+    volcanic_score = Dynamo_Factor * vol["dynamo_weight"] + min(Body_Mass, vol["mass_cap"]) * vol["mass_weight"] + tidal_factor
+    if volcanic_score >= vol["high_min"]:
         return "High"
-    elif volcanic_score >= 0.3:
+    elif volcanic_score >= vol["moderate_min"]:
         return "Moderate"
-    elif volcanic_score >= 0.15:
+    elif volcanic_score >= vol["low_min"]:
         return "Low"
     else:
         return "None"
@@ -73,18 +81,19 @@ def TectonicVolcanicActivity(Dynamo_Factor, Body_Mass, Body_SMA):
 def TectonicErosionRate(Has_Atmosphere, Surface_Pressure, Surface_Temperature, Ocean_Coverage):
     if not Has_Atmosphere:
         return "None"
-    score = min(Surface_Pressure, 10.0) * 0.05
-    if Surface_Temperature > 200 or Surface_Temperature < -100:
-        score += 0.3
-    elif abs(Surface_Temperature) > 50:
-        score += 0.15
+    ero = Model["erosion"]
+    score = min(Surface_Pressure, ero["pressure_cap"]) * ero["pressure_weight"]
+    if Surface_Temperature > ero["extreme_hot_c"] or Surface_Temperature < ero["extreme_cold_c"]:
+        score += ero["extreme_bonus"]
+    elif abs(Surface_Temperature) > ero["mild_abs_c"]:
+        score += ero["mild_bonus"]
     if Ocean_Coverage > 0:
-        score += Ocean_Coverage * 0.8
-    if score >= 0.5:
+        score += Ocean_Coverage * ero["ocean_weight"]
+    if score >= ero["high_min"]:
         return "High"
-    elif score >= 0.25:
+    elif score >= ero["moderate_min"]:
         return "Moderate"
-    elif score >= 0.1:
+    elif score >= ero["low_min"]:
         return "Low"
     else:
         return "None"
@@ -93,28 +102,30 @@ def TectonicGeneratePlates(key, Plate_Count, Body_Radius, Ocean_Coverage, Max_El
     random.seed(key + str(index) + "plategen")
     Re = 6371  # km
     plates = []
-    oceanic_ratio = max(0.2, min(Ocean_Coverage + 0.3, 0.7))
+    gen = Model["plate_generation"]
+    oceanic_ratio = max(gen["oceanic_range"][0], min(Ocean_Coverage + gen["oceanic_offset"], gen["oceanic_range"][1]))
+    jitter = gen["position_jitter_deg"]
     golden_ratio = (1 + math.sqrt(5)) / 2
     for p in range(Plate_Count):
         theta = math.acos(1 - 2 * (p + 0.5) / Plate_Count)
         phi = 2 * math.pi * p / golden_ratio
-        lat = math.degrees(theta) - 90.0 + random.uniform(-10, 10)
-        lon = math.degrees(phi) % 360 - 180 + random.uniform(-10, 10)
+        lat = math.degrees(theta) - 90.0 + random.uniform(-jitter, jitter)
+        lon = math.degrees(phi) % 360 - 180 + random.uniform(-jitter, jitter)
         lat = max(-89.0, min(89.0, lat))
         lon = ((lon + 180) % 360) - 180
         if random.random() < oceanic_ratio:
             plate_type = "oceanic"
-            thickness = random.uniform(5.0, 15.0)
-            mean_elev = random.uniform(Max_Depth * 0.6, Max_Depth * 0.1)
+            thickness = random.uniform(*gen["oceanic_thickness_km"])
+            mean_elev = random.uniform(Max_Depth * gen["oceanic_depth_fraction"][0], Max_Depth * gen["oceanic_depth_fraction"][1])
         else:
             plate_type = "continental"
-            thickness = random.uniform(25.0, 70.0)
-            mean_elev = random.uniform(0.2, Max_Elevation * 0.3)
+            thickness = random.uniform(*gen["continental_thickness_km"])
+            mean_elev = random.uniform(gen["continental_min_elevation_km"], Max_Elevation * gen["continental_elevation_fraction"])
         base_area = 1.0 / Plate_Count
-        area = base_area * random.uniform(0.5, 1.5)
+        area = base_area * random.uniform(*gen["area_jitter"])
         azimuth = random.uniform(0, 360)
-        speed = random.uniform(1.0, 12.0) * (9.81 / Body_SurfaceGravity) * 0.7
-        speed = max(0.5, min(speed, 20.0))
+        speed = random.uniform(*gen["speed_cm_yr"]) * (9.81 / Body_SurfaceGravity) * gen["speed_scale"]
+        speed = max(gen["speed_range"][0], min(speed, gen["speed_range"][1]))
         plates.append({
             "id": p,
             "type": plate_type,
@@ -136,15 +147,16 @@ def TectonicBoundaryType(plate_a, plate_b):
     delta = abs(az_a - az_b) % (2 * math.pi)
     if delta > math.pi:
         delta = 2 * math.pi - delta
-    if delta > 2.09:
+    if delta > Model["boundaries"]["convergent_min_rad"]:
         return "convergent"
-    elif delta < 1.05:
+    elif delta < Model["boundaries"]["divergent_max_rad"]:
         return "divergent"
     else:
         return "transform"
 
 def TectonicGenerateBoundaries(key, plates, Max_Elevation, Max_Depth, index):
     random.seed(key + str(index) + "boundaries")
+    bnd = Model["boundaries"]
     boundaries = []
     processed = set()
     for i in range(len(plates)):
@@ -157,7 +169,7 @@ def TectonicGenerateBoundaries(key, plates, Max_Elevation, Max_Depth, index):
             dist = math.sqrt(dlat**2 + dlon**2)
             distances.append((j, dist))
         distances.sort(key=lambda x: x[1])
-        neighbor_count = min(random.randint(2, 4), len(distances))
+        neighbor_count = min(random.randint(*bnd["neighbors"]), len(distances))
         for n in range(neighbor_count):
             j = distances[n][0]
             pair = tuple(sorted([i, j]))
@@ -171,21 +183,21 @@ def TectonicGenerateBoundaries(key, plates, Max_Elevation, Max_Depth, index):
             if boundary_type == "convergent":
                 if pa_type == "continental" and pb_type == "continental":
                     boundary["feature"] = "mountain_range"
-                    boundary["peak_elevation"] = {"value": round(Max_Elevation * random.uniform(0.5, 0.95), 2), "unit": "km"}
+                    boundary["peak_elevation"] = {"value": round(Max_Elevation * random.uniform(*bnd["mountain_fraction"]), 2), "unit": "km"}
                 elif pa_type == "oceanic" and pb_type == "oceanic":
                     boundary["feature"] = "trench"
-                    boundary["depth"] = {"value": round(Max_Depth * random.uniform(0.6, 1.0), 2), "unit": "km"}
+                    boundary["depth"] = {"value": round(Max_Depth * random.uniform(*bnd["trench_fraction"]), 2), "unit": "km"}
                 else:
                     boundary["feature"] = "subduction_zone"
-                    boundary["volcanic_arc_elevation"] = {"value": round(Max_Elevation * random.uniform(0.3, 0.7), 2), "unit": "km"}
-                    boundary["trench_depth"] = {"value": round(Max_Depth * random.uniform(0.4, 0.8), 2), "unit": "km"}
+                    boundary["volcanic_arc_elevation"] = {"value": round(Max_Elevation * random.uniform(*bnd["volcanic_arc_fraction"]), 2), "unit": "km"}
+                    boundary["trench_depth"] = {"value": round(Max_Depth * random.uniform(*bnd["subduction_trench_fraction"]), 2), "unit": "km"}
             elif boundary_type == "divergent":
                 if pa_type == "oceanic" or pb_type == "oceanic":
                     boundary["feature"] = "mid_ocean_ridge"
-                    boundary["ridge_elevation"] = {"value": round(abs(Max_Depth) * random.uniform(0.1, 0.4), 2), "unit": "km"}
+                    boundary["ridge_elevation"] = {"value": round(abs(Max_Depth) * random.uniform(*bnd["ridge_fraction"]), 2), "unit": "km"}
                 else:
                     boundary["feature"] = "rift_valley"
-                    boundary["depth"] = {"value": round(Max_Depth * random.uniform(0.2, 0.5), 2), "unit": "km"}
+                    boundary["depth"] = {"value": round(Max_Depth * random.uniform(*bnd["rift_fraction"]), 2), "unit": "km"}
             elif boundary_type == "transform":
                 boundary["feature"] = "fault_line"
                 boundary["seismic_activity"] = random.choice(["High", "Moderate", "Low"])
@@ -277,6 +289,7 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
             "Note": "Gas giants do not have solid surface tectonics"
         }
     Activity = TectonicActivity(Dynamo_Factor, Body_Mass, Body_Type)
+    relief = Model["relief"]
     if Activity == "Dead":
         Max_Elev = TectonicMaxElevation(Body_SurfaceGravity)
         Max_Dep = TectonicMaxDepth(Max_Elev)
@@ -284,10 +297,10 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
         return {
             "Tectonic_Activity": {"value": Activity},
             "Plate_Count": {"value": 1},
-            "Max_Elevation": {"value": round(Max_Elev * 0.4, 2), "unit": "km"},
-            "Max_Depth": {"value": round(Max_Dep * 0.3, 2), "unit": "km"},
+            "Max_Elevation": {"value": round(Max_Elev * relief["dead_elevation_fraction"], 2), "unit": "km"},
+            "Max_Depth": {"value": round(Max_Dep * relief["dead_depth_fraction"], 2), "unit": "km"},
             "Ocean_Coverage": {"value": Ocean, "unit": "fraction"},
-            "Sea_Level": {"value": 0.0 if Ocean == 0 else round(Max_Dep * 0.15, 2), "unit": "km"},
+            "Sea_Level": {"value": 0.0 if Ocean == 0 else round(Max_Dep * relief["sea_level_depth_fraction"], 2), "unit": "km"},
             "Volcanic_Activity": {"value": "None"},
             "Erosion_Rate": {"value": TectonicErosionRate(Has_Atmosphere, Surface_Pressure, Surface_Temperature, Ocean)},
             "Plates": [],
@@ -296,7 +309,7 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
         }
     Plate_Count = TectonicPlateCount(key, Dynamo_Factor, Body_Mass, Rotational_Period, index)
     if Activity == "Dormant":
-        Plate_Count = max(3, Plate_Count // 2)
+        Plate_Count = max(Model["plates"]["range"][0], Plate_Count // Model["plates"]["dormant_divisor"])
     Max_Elev = TectonicMaxElevation(Body_SurfaceGravity)
     Max_Dep = TectonicMaxDepth(Max_Elev)
     Ocean = TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index)
@@ -305,7 +318,7 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
         downgrade = {"High": "Moderate", "Moderate": "Low", "Low": "None", "None": "None"}
         Volcanic = downgrade[Volcanic]
     Erosion = TectonicErosionRate(Has_Atmosphere, Surface_Pressure, Surface_Temperature, Ocean)
-    Sea_Level = 0.0 if Ocean == 0 else round(Max_Dep * 0.15, 2)
+    Sea_Level = 0.0 if Ocean == 0 else round(Max_Dep * relief["sea_level_depth_fraction"], 2)
     Plates = TectonicGeneratePlates(key, Plate_Count, Body_Radius, Ocean, Max_Elev, Max_Dep, Body_SurfaceGravity, index)
     Boundaries = TectonicGenerateBoundaries(key, Plates, Max_Elev, Max_Dep, index)
     return {

@@ -1,16 +1,10 @@
-import random, math
+import json, random, math
 
-GAS_TABLE = [
-    {"name": "H2",  "formula": "H₂",  "mol_mass": 2.016,  "abundance": 10.0, "zones": ["giant"]},
-    {"name": "He",  "formula": "He",   "mol_mass": 4.003,  "abundance": 8.0,  "zones": ["giant"]},
-    {"name": "CH4", "formula": "CH₄",  "mol_mass": 16.04,  "abundance": 1.5,  "zones": ["giant", "rocky", "icy_dwarf"]},
-    {"name": "NH3", "formula": "NH₃",  "mol_mass": 17.03,  "abundance": 1.0,  "zones": ["giant", "rocky"]},
-    {"name": "H2O", "formula": "H₂O",  "mol_mass": 18.015, "abundance": 2.0,  "zones": ["rocky", "giant"]},
-    {"name": "N2",  "formula": "N₂",   "mol_mass": 28.014, "abundance": 4.0,  "zones": ["rocky", "rocky_dwarf", "icy_dwarf"]},
-    {"name": "O2",  "formula": "O₂",   "mol_mass": 31.998, "abundance": 0.5,  "zones": ["rocky"]},
-    {"name": "CO2", "formula": "CO₂",  "mol_mass": 44.01,  "abundance": 3.0,  "zones": ["rocky", "rocky_dwarf", "icy_dwarf"]},
-    {"name": "SO2", "formula": "SO₂",  "mol_mass": 64.07,  "abundance": 0.8,  "zones": ["rocky", "rocky_dwarf"]},
-]
+with open("Model_Data.json", "r", encoding="utf-8") as f:
+    Model = json.load(f)["atmosphere"]
+
+# Gas properties (Model_Data atmosphere.gases). Order matters: draws happen in this order.
+GAS_TABLE = Model["gases"]
 
 def BodyEscapeVelocity(Body_Mass, Body_Radius):
     G = 6.6743e-11
@@ -30,7 +24,9 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
     random.seed(key + str(index) + "atmo" + seed_suffix)
     temperature_K = max(Body_SurfaceTemperature + 273.15, 10.0)
     V_escape = BodyEscapeVelocity(Body_Mass, Body_Radius)
-    JEANS_FACTOR = 6.0
+    JEANS_FACTOR = Model["jeans_factor"]
+    strip = Model["stellar_stripping"]
+    comp = Model["composition"]
     retained_gases = []
     for gas in GAS_TABLE:
         if Body_Type not in gas["zones"]:
@@ -38,9 +34,9 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
         V_thermal = BodyThermalVelocity(gas["mol_mass"], temperature_K)
         if V_escape < JEANS_FACTOR * V_thermal:
             continue
-        if Body_SMA < 0.3 and gas["mol_mass"] < 20.0:
-            strip_chance = 0.7 * (1.0 - Body_SMA / 0.3)
-            strip_chance *= max(0.1, 1.0 - Dynamo_Factor * 0.5)
+        if Body_SMA < strip["sma_au"] and gas["mol_mass"] < strip["light_gas_mol_mass"]:
+            strip_chance = strip["max_chance"] * (1.0 - Body_SMA / strip["sma_au"])
+            strip_chance *= max(strip["min_exposure"], 1.0 - Dynamo_Factor * strip["dynamo_shielding"])
             # Sub-Earths (< 0.1 Me terrestrial) are more vulnerable to stripping
             if Body_Type == "rocky" and Subclass_Data is not None and Body_Mass < Subclass_Data.get("sub_earth_threshold", 0.1):
                 strip_chance = min(1.0, strip_chance + Subclass_Data.get("sub_earth_strip_bonus", 0.3))
@@ -58,7 +54,7 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
 
     fractions = {}
     for gas in retained_gases:
-        weight = gas["abundance"] * random.uniform(0.5, 1.5)
+        weight = gas["abundance"] * random.uniform(*comp["abundance_jitter"])
 
         if Body_Type == "giant":
             if subclass_weights is not None:
@@ -67,18 +63,18 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
                 # fixes the He/H2 dominance inversion bug.
                 gas_override = subclass_weights.get(gas["name"], None)
                 if gas_override is not None:
-                    weight = gas_override * random.uniform(0.8, 1.2)
+                    weight = gas_override * random.uniform(*comp["giant_weight_jitter"])
             else:
                 # Legacy fallback if no subclass data — retain old behaviour
                 if gas["name"] in ["H2", "He"]:
-                    weight *= 3.0
+                    weight *= comp["legacy_giant_h2_he_boost"]
         elif Body_Type == "rocky" and gas["name"] in ["N2", "CO2"]:
-            weight *= 1.5 + 0.5 * max(0.0, Dynamo_Factor)
+            weight *= comp["rocky_n2_co2_base"] + comp["rocky_n2_co2_dynamo"] * max(0.0, Dynamo_Factor)
 
-        if gas["name"] in ["CH4", "NH3"] and temperature_K < 200:
-            weight *= 2.0
-        elif gas["name"] in ["CH4", "NH3"] and temperature_K > 500:
-            weight *= 0.3
+        if gas["name"] in ["CH4", "NH3"] and temperature_K < comp["cold_below_k"]:
+            weight *= comp["cold_ch4_nh3_factor"]
+        elif gas["name"] in ["CH4", "NH3"] and temperature_K > comp["hot_above_k"]:
+            weight *= comp["hot_ch4_nh3_factor"]
 
         fractions[gas["name"]] = weight
 
@@ -90,7 +86,7 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
     sorted_gases = sorted(fractions.items(), key=lambda x: x[1], reverse=True)
     gas_lookup = {g["name"]: g["formula"] for g in GAS_TABLE}
 
-    if len(sorted_gases) >= 2 and sorted_gases[1][1] > 0.10:
+    if len(sorted_gases) >= 2 and sorted_gases[1][1] > comp["secondary_gas_label_min"]:
         Atmosphere_Type = gas_lookup[sorted_gases[0][0]] + "/" + gas_lookup[sorted_gases[1][0]]
     else:
         Atmosphere_Type = gas_lookup[dominant] + "-dominant"
@@ -103,33 +99,32 @@ def BodyAtmosphereComposition(key, Body_Type, Body_Mass, Body_Radius, Body_Surfa
 
 def BodyAtmosphereMassFraction(key, Body_Type, Atmo_Class, Dynamo_Factor, Body_Mass, Body_SurfaceGravity, index, seed_suffix=""):
     random.seed(key + str(index) + "amf" + seed_suffix)
+    amf = Model["mass_fraction"]
     if Body_Type == "giant":
-        base = random.uniform(0.50, 0.95)
-        mass_boost = 0.02 * math.log10(max(Body_Mass, 10.0))
-        return min(base + mass_boost, 0.98)
+        base = random.uniform(*amf["giant_range"])
+        mass_boost = amf["giant_mass_boost"] * math.log10(max(Body_Mass, amf["giant_mass_floor"]))
+        return min(base + mass_boost, amf["giant_max"])
     g_ratio = Body_SurfaceGravity / 9.81
     if Atmo_Class == "Thick":
-        base_log_min = -7.0
-        base_log_max = -4.0
+        base_log_min, base_log_max = amf["thick_log_range"]
     else:
-        base_log_min = -10.0
-        base_log_max = -7.0
-    g_shift = 3.0 * math.log10(max(g_ratio, 0.05))
+        base_log_min, base_log_max = amf["thin_log_range"]
+    g_shift = amf["gravity_shift"] * math.log10(max(g_ratio, amf["gravity_ratio_floor"]))
     log_min = base_log_min + g_shift
     log_max = base_log_max + g_shift
     range_center = (log_min + log_max) / 2.0
     range_half = (log_max - log_min) / 2.0
-    narrowing = 0.4
+    narrowing = amf["narrowing"]
     log_min = range_center - range_half * narrowing
     log_max = range_center + range_half * narrowing
-    if g_ratio < 0.5:
+    if g_ratio < amf["low_gravity_ratio"]:
         range_width = log_max - log_min
-        log_max = log_min + range_width * 0.5
+        log_max = log_min + range_width * amf["low_gravity_range_keep"]
     log_AMF = random.uniform(log_min, log_max)
     AMF = 10 ** log_AMF
-    AMF *= (1.0 + 0.3 * max(0.0, Dynamo_Factor - 0.2))
-    AMF *= (1.0 + 0.3 * math.log10(max(Body_Mass / 1.0, 0.01)))
-    AMF = min(AMF, 0.01)
+    AMF *= (1.0 + amf["dynamo_boost"] * max(0.0, Dynamo_Factor - amf["dynamo_offset"]))
+    AMF *= (1.0 + amf["mass_boost"] * math.log10(max(Body_Mass / 1.0, amf["mass_floor"])))
+    AMF = min(AMF, amf["max"])
     return AMF
 
 def BodyMeanMolecularWeight(Atmo_Composition):
@@ -162,29 +157,25 @@ def BodyBareTemperature(Star_Lo, Body_SMA):
     return round(Bare_Temperature_K - 273.15, 2)
 
 def BodyAlbedo(Atmo_Composition, Body_Type, Atmo_Class):
+    params = Model["albedo"]
     if Atmo_Composition is None:
-        return 0.12
-    gas_albedo = {
-        "H₂": 0.40, "He": 0.10, "CH₄": 0.45, "NH₃": 0.50,
-        "H₂O": 0.65, "N₂": 0.05, "O₂": 0.05, "CO₂": 0.40, "SO₂": 0.55,
-    }
-    albedo = sum(data["value"] * gas_albedo.get(formula, 0.1) for formula, data in Atmo_Composition.items())
+        return params["no_atmosphere"]
+    gas_albedo = {g["formula"]: g["albedo"] for g in GAS_TABLE}
+    albedo = sum(data["value"] * gas_albedo[formula] for formula, data in Atmo_Composition.items())
     if Atmo_Class == "Thick":
-        albedo *= 1.4
+        albedo *= params["thick_multiplier"]
     elif Atmo_Class == "Thin":
-        albedo *= 0.6
-    return round(max(0.05, min(albedo, 0.85)), 4)
+        albedo *= params["thin_multiplier"]
+    return round(max(params["range"][0], min(albedo, params["range"][1])), 4)
 
 def BodyGreenhouseFactor(Atmo_Composition, Surface_Pressure):
     if Atmo_Composition is None or Surface_Pressure <= 0:
         return 1.0
-    gas_greenhouse = {
-        "H₂": 0.0, "He": 0.0, "CH₄": 30.0, "NH₃": 8.0,
-        "H₂O": 3.5, "N₂": 0.0, "O₂": 0.0, "CO₂": 1.5, "SO₂": 0.5,
-    }
-    greenhouse_opacity = sum(data["value"] * gas_greenhouse.get(formula, 0.0) for formula, data in Atmo_Composition.items())
-    pressure_factor = max(0.0, 1.0 + math.log10(max(Surface_Pressure, 0.001)))
-    greenhouse_multiplier = min(1.0 + 0.12 * greenhouse_opacity * pressure_factor, 3.5)
+    params = Model["greenhouse"]
+    gas_greenhouse = {g["formula"]: g["greenhouse"] for g in GAS_TABLE}
+    greenhouse_opacity = sum(data["value"] * gas_greenhouse[formula] for formula, data in Atmo_Composition.items())
+    pressure_factor = max(0.0, 1.0 + math.log10(max(Surface_Pressure, params["pressure_floor"])))
+    greenhouse_multiplier = min(1.0 + params["coefficient"] * greenhouse_opacity * pressure_factor, params["max"])
     return round(greenhouse_multiplier, 4)
 
 def BodyCorrectedTemperature(Star_Lo, Body_SMA, Albedo, Greenhouse_Multiplier, Tidal_Heat_Flux=0.0):
@@ -208,14 +199,15 @@ def BodyAtmospherics(key, Dynamo_Factor, Body_SurfaceGravity, Body_Radius, Star_
     Body_Irradiance = round(((Star_R**2 * SBSigma * Star_T**4) / (Body_SMA_km**2)), 3)
     Bare_Temperature = BodyBareTemperature(Star_Lo, Body_SMA)
 
-    if Dynamo_Factor >= 0.3:
+    classes = Model["classes"]
+    if Dynamo_Factor >= classes["thick_min_dynamo"]:
         Body_Atmosphere = True
         Atmo_Class = "Thick"
-        k = 1.5
-    elif Dynamo_Factor >= 0.2:
+        k = classes["thick_exosphere_k"]
+    elif Dynamo_Factor >= classes["thin_min_dynamo"]:
         Body_Atmosphere = True
         Atmo_Class = "Thin"
-        k = 0.5
+        k = classes["thin_exosphere_k"]
     else:
         Body_Atmosphere = False
         Atmo_Class = "None"
@@ -243,7 +235,7 @@ def BodyAtmospherics(key, Dynamo_Factor, Body_SurfaceGravity, Body_Radius, Star_
         # Super-Earths have stronger outgassing — boost AMF from subclass data
         if Body_Subclass == "super_earth" and Subclass_Data is not None:
             AMF *= Subclass_Data.get("amf_multiplier", 1.0)
-            AMF = min(AMF, 0.01)
+            AMF = min(AMF, Model["mass_fraction"]["max"])
         Mean_Mol_Weight = BodyMeanMolecularWeight(Atmo_Composition)
         Surface_Pressure = BodySurfacePressureCalculation(Body_Mass, Body_Radius, Body_SurfaceGravity, AMF)
         Atmo_Mass_kg = AMF * Body_Mass * 5.972e24

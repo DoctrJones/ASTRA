@@ -1,9 +1,11 @@
-import math
+import json, math
+from .atmosphere import GAS_TABLE
 
-GAS_NAME_MAP = {
-    "H₂": "H2", "He": "He", "CH₄": "CH4", "NH₃": "NH3",
-    "H₂O": "H2O", "N₂": "N2", "O₂": "O2", "CO₂": "CO2", "SO₂": "SO2"
-}
+with open("Habitability_Data.json", "r") as f:
+    Shape = json.load(f)["scoring_shape"]
+
+# Formula -> plain name, built from the gas table (Model_Data atmosphere.gases)
+GAS_NAME_MAP = {g["formula"]: g["name"] for g in GAS_TABLE}
 
 def HabitabilityRangeScore(value, viable_min, viable_max, optimal_min, optimal_max):
     if value < viable_min or value > viable_max:
@@ -11,8 +13,8 @@ def HabitabilityRangeScore(value, viable_min, viable_max, optimal_min, optimal_m
     center = (optimal_min + optimal_max) / 2.0
     optimal_half_width = (optimal_max - optimal_min) / 2.0
     if optimal_half_width <= 0:
-        optimal_half_width = (viable_max - viable_min) * 0.1
-    sigma = optimal_half_width / 0.5
+        optimal_half_width = (viable_max - viable_min) * Shape["zero_width_fraction"]
+    sigma = optimal_half_width / Shape["optimal_half_width_sigmas"]
     score = math.exp(-((value - center)**2) / (2 * sigma**2))
     if value < optimal_min:
         viable_range = optimal_min - viable_min
@@ -63,9 +65,9 @@ def HabitabilityAtmosphereScore(Atmo_Composition, required_gases):
         if min_frac > 0 and actual_frac < min_frac:
             score += 0.0
         elif min_frac == 0 and actual_frac == 0:
-            score += weight * 0.3
+            score += weight * Shape["absent_optional_gas_credit"]
         else:
-            gas_score = min(1.0, actual_frac / (actual_frac + 0.05))
+            gas_score = min(1.0, actual_frac / (actual_frac + Shape["gas_saturation_fraction"]))
             score += weight * gas_score
     return score / total_weight if total_weight > 0 else 0.0
 

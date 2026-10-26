@@ -1,4 +1,7 @@
-import random, math
+import json, random, math
+
+with open("Model_Data.json", "r") as f:
+    Model = json.load(f)["moons"]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -10,8 +13,8 @@ Earth_Radius_km  = 6371.0
 AU               = 1.496e11
 SBSigma          = 5.67e-8
 
-# Mass threshold above which a moon runs the full planetary pipeline
-PLANETARY_MASS_THRESHOLD = 0.5   # Me
+# The mass threshold above which a moon runs the full planetary pipeline is
+# Model_Data moons.planetary_threshold (Me).
 
 # Tidal flux ceiling above which a moon is considered tidally disrupted.
 # Moons producing tidal flux above this ceiling are treated as tidally
@@ -23,7 +26,7 @@ PLANETARY_MASS_THRESHOLD = 0.5   # Me
 # ~500x Io — hot but not immediately absurd. Tightened from 1e5 in v0.3.2
 # following the tidal formula fix (missing mean motion factor); the old
 # ceiling was calibrated against fluxes that were ~24,000x-200,000x too high.
-TIDAL_DISRUPTION_FLUX = 1e3   # W/m²
+TIDAL_DISRUPTION_FLUX = Model["tidal_disruption_flux"]   # W/m²
 
 # ---------------------------------------------------------------------------
 # Orbital boundary calculations
@@ -40,10 +43,10 @@ def MoonRocheLimit(Parent_Radius_Re, Parent_Density_kgkm3, Moon_Density_kgkm3):
     return 2.44 * R_parent_m * (rho_parent / rho_moon) ** (1.0 / 3.0)
 
 def MoonStableZone(Parent_Radius_Re, Parent_Density_kgkm3, Moon_Density_kgkm3, Hill_Radius_AU):
-    """Returns (roche_m, stable_max_m). Stable max = 0.5 * Hill radius."""
+    """Returns (roche_m, stable_max_m). Stable max = hill_fraction x Hill radius (Model_Data moons.placement)."""
     roche_m    = MoonRocheLimit(Parent_Radius_Re, Parent_Density_kgkm3, Moon_Density_kgkm3)
     hill_m     = Hill_Radius_AU * AU
-    stable_max = hill_m * 0.5
+    stable_max = hill_m * Model["placement"]["hill_fraction"]
     return roche_m, stable_max
 
 # ---------------------------------------------------------------------------
@@ -53,14 +56,15 @@ def MoonStableZone(Parent_Radius_Re, Parent_Density_kgkm3, Moon_Density_kgkm3, H
 def MoonMassGeneration(key, parent_mass_Me, parent_subclass, index, moon_index):
     """Log-uniform mass scaled to parent. Canup-Ward limit ~0.025 x parent."""
     random.seed(key + str(index) + "moon" + str(moon_index))
+    mp = Model["mass"]
     if parent_subclass in ("gas_giant", "ice_giant"):
-        log_min = math.log10(parent_mass_Me * 0.000001)
-        log_max = math.log10(parent_mass_Me * 0.025)
+        log_min = math.log10(parent_mass_Me * mp["giant_parent_fraction"][0])
+        log_max = math.log10(parent_mass_Me * mp["giant_parent_fraction"][1])
     else:
-        log_min = math.log10(max(parent_mass_Me * 0.0001, 0.0001))
-        log_max = math.log10(max(parent_mass_Me * 0.012,  0.001))
-    log_min = max(log_min, math.log10(0.0001))
-    log_max = max(log_max, log_min + 0.5)
+        log_min = math.log10(max(parent_mass_Me * mp["rocky_parent_fraction"][0], mp["rocky_parent_floor"][0]))
+        log_max = math.log10(max(parent_mass_Me * mp["rocky_parent_fraction"][1], mp["rocky_parent_floor"][1]))
+    log_min = max(log_min, math.log10(mp["absolute_min"]))
+    log_max = max(log_max, log_min + mp["min_log_span"])
     return round(10 ** random.uniform(log_min, log_max), 6)
 
 def MoonDensityGeneration(key, moon_type, index, moon_index, tidal_params):
@@ -76,15 +80,11 @@ def MoonDensityGeneration(key, moon_type, index, moon_index, tidal_params):
     iron-density moonlets.
     """
     random.seed(key + str(index) + "moondens" + str(moon_index))
-    params  = tidal_params.get(moon_type, {})
-    if moon_type == "rocky_moon":
-        d_mean_default, d_sigma_default = 3.5, 0.5
-        d_lo, d_hi = 2.5, 5.5   # bulk rock — no compression regime for small bodies
-    else:  # icy_moon
-        d_mean_default, d_sigma_default = 1.8, 0.3
-        d_lo, d_hi = 1.0, 2.5   # ice/rock mixtures
-    d_mean  = params.get("density_mean",  d_mean_default)
-    d_sigma = params.get("density_sigma", d_sigma_default)
+    params  = tidal_params[moon_type]
+    # Clamp per moon type (Model_Data moons.density_range): bulk rock / ice-rock mixtures
+    d_lo, d_hi = Model["density_range"][moon_type]
+    d_mean  = params["density_mean"]
+    d_sigma = params["density_sigma"]
     density_gcm3 = random.gauss(d_mean, d_sigma)
     density_gcm3 = max(d_lo, min(density_gcm3, d_hi))
     # g/cm^3 -> kg/km^3 :  1 g/cm^3 = 1000 kg/m^3 = 1e12 kg/km^3
@@ -112,31 +112,34 @@ def MoonSurfaceGravity(moon_mass_Me, moon_radius_Re):
 
 def MoonDynamoFactor(key, moon_mass_Me, moon_type, index, moon_index):
     """Simplified dynamo for small moons only.
-    Moons >= PLANETARY_MASS_THRESHOLD use the full planetary core calculation instead."""
+    Moons >= moon_planetary_threshold use the full planetary core calculation instead."""
     random.seed(key + str(index) + "moondyn" + str(moon_index))
+    dyn = Model["small_moon_dynamo"]
     if moon_type == "rocky_moon":
-        base = 0.05 + 0.25 * min(1.0, math.log10(max(moon_mass_Me, 0.001)) + 3) / 3.0
+        base = dyn["base"] + dyn["span"] * min(1.0, math.log10(max(moon_mass_Me, dyn["mass_floor"])) + dyn["decades"]) / dyn["decades"]
         return round(random.uniform(0.0, base), 4)
     else:
-        return round(random.uniform(0.0, 0.05), 4)
+        return round(random.uniform(*dyn["icy_range"]), 4)
 
-# Minimum mass for tidal outgassing to sustain atmosphere against Jeans escape.
-# Below this (~Io mass), outgassed material is lost too quickly regardless of flux.
-TIDAL_ATMOSPHERE_MASS_GATE = 0.05  # Me
+# Minimum mass for tidal outgassing to sustain atmosphere against Jeans escape is
+# Model_Data moons.tidal_atmosphere.mass_gate. Below it (~Io mass), outgassed
+# material is lost too quickly regardless of flux.
 
-def MoonTidalAtmosphereGate(dynamo_factor, tidal_flux_Wm2, moon_mass_Me):
+def MoonTidalAtmosphereGate(dynamo_factor, tidal_flux_Wm2, moon_mass_Me, planetary_threshold):
     """Returns an effective dynamo value for atmosphere gating.
     Tidal outgassing can sustain a thin atmosphere on volcanically active moons
-    even when the intrinsic dynamo is below the 0.2 threshold.
-    Requires: tidal flux >= 0.5 W/m² AND moon mass >= 0.05 Me.
+    even when the intrinsic dynamo is below the thin-atmosphere threshold.
+    Requires tidal flux >= min_flux AND moon mass >= mass_gate (Model_Data moons.tidal_atmosphere).
     Below the mass gate, Jeans escape strips outgassed material regardless of flux.
-    Only applies to small moons — large moons use the planetary pipeline directly."""
-    if moon_mass_Me >= PLANETARY_MASS_THRESHOLD:
+    Only applies to small moons (< planetary_threshold, Planet_Data
+    moon_planetary_threshold) — large moons use the planetary pipeline directly."""
+    if moon_mass_Me >= planetary_threshold:
         return dynamo_factor  # planetary pipeline handles its own dynamo
-    if moon_mass_Me < TIDAL_ATMOSPHERE_MASS_GATE:
+    gate = Model["tidal_atmosphere"]
+    if moon_mass_Me < gate["mass_gate"]:
         return dynamo_factor  # too small — Jeans escape wins
-    if tidal_flux_Wm2 >= 0.5 and dynamo_factor < 0.2:
-        return 0.21
+    if tidal_flux_Wm2 >= gate["min_flux"] and dynamo_factor < gate["dynamo_below"]:
+        return gate["effective_dynamo"]
     return dynamo_factor
 
 # ---------------------------------------------------------------------------
@@ -146,10 +149,11 @@ def MoonTidalAtmosphereGate(dynamo_factor, tidal_flux_Wm2, moon_mass_Me):
 def MoonOrbitalEccentricity(key, index, moon_index, moon_sma_m, roche_m):
     """Beta distribution biased low. Close-in moons skew higher (resonance pumping)."""
     random.seed(key + str(index) + "moonex" + str(moon_index))
-    proximity = max(0.0, 1.0 - (moon_sma_m / (roche_m * 10.0)))
-    alpha = max(0.5, 2.0 - proximity * 1.5)
-    beta  = max(2.0, 8.0 - proximity * 3.0)
-    e = random.betavariate(alpha, beta) * 0.35
+    ecc = Model["eccentricity"]
+    proximity = max(0.0, 1.0 - (moon_sma_m / (roche_m * ecc["proximity_roche_multiple"])))
+    alpha = max(ecc["alpha_floor"], ecc["alpha_max"] - proximity * ecc["alpha_drop"])
+    beta  = max(ecc["beta_floor"], ecc["beta_max"] - proximity * ecc["beta_drop"])
+    e = random.betavariate(alpha, beta) * ecc["scale"]
     return round(e, 4)
 
 def MoonOrbitalPeriod(moon_sma_m, parent_mass_Me):
@@ -196,27 +200,29 @@ def MoonTidalHeating(moon_mass_Me, moon_radius_Re, moon_sma_m, eccentricity,
     return round(tidal_power_W, 4), round(tidal_flux_Wm2, 6)
 
 def MoonTidalVolcanicFactor(tidal_flux_Wm2):
-    """Converts tidal flux to volcanic factor 0.0–1.5.
-    Io ~2 W/m² → ~1.0. Earth internal ~0.09 W/m² → ~0.3."""
+    """Converts tidal flux to a volcanic factor, 0 up to Model_Data moons.volcanic_factor.max.
+    With the default slope/intercept: Io ~2 W/m² → ~1.0. Earth internal ~0.09 W/m² → ~0.3."""
     if tidal_flux_Wm2 <= 0:
         return 0.0
-    score = 0.3 * math.log10(max(tidal_flux_Wm2, 1e-6) + 1e-6) + 0.8
-    return round(max(0.0, min(score, 1.5)), 4)
+    vf = Model["volcanic_factor"]
+    score = vf["slope"] * math.log10(max(tidal_flux_Wm2, 1e-6) + 1e-6) + vf["intercept"]
+    return round(max(0.0, min(score, vf["max"])), 4)
 
-def MoonTidalFluxEstimate(moon_mass_Me, moon_sma_m, parent_mass_Me, k2=0.3, Q=100):
+def MoonTidalFluxEstimate(moon_mass_Me, moon_sma_m, parent_mass_Me):
     """Quick tidal flux estimate used as a pre-generation disruption check.
-    Uses representative k2/Q values for a rocky moon and the corrected PCR
-    formula with mean motion factor (v0.3.2 fix).
+    Uses representative k2/Q values for a rocky moon (Model_Data moons.flux_estimate)
+    and the corrected PCR formula with mean motion factor (v0.3.2 fix).
     Full calculation runs inside GenerateMoon after this check passes."""
     if moon_sma_m <= 0:
         return 0.0
-    R_moon_approx = (moon_mass_Me ** 0.32) * Earth_Radius  # rough radius estimate
+    fe = Model["flux_estimate"]
+    R_moon_approx = (moon_mass_Me ** fe["radius_exponent"]) * Earth_Radius  # rough radius estimate
     M_parent      = parent_mass_Me * Earth_Mass
-    e_typical     = 0.15   # representative eccentricity for early check.
+    e_typical     = fe["eccentricity"]   # representative eccentricity for early check.
                            # Higher than the median draw (~0.03-0.05) to catch
                            # cases where the actual ecc lands in the upper tail;
                            # a post-generation flux check backstops leaks.
-    k2_over_Q     = k2 / Q
+    k2_over_Q     = fe["k2"] / fe["Q"]
     n_motion      = math.sqrt(G * M_parent / (moon_sma_m ** 3))
     numerator     = (21.0 / 2.0) * k2_over_Q * G * (M_parent**2) * (R_moon_approx**5) * (e_typical**2) * n_motion
     denominator   = moon_sma_m ** 6
@@ -243,29 +249,30 @@ def MoonType(moon_sma_m, parent_sma_AU, moon_ice_line_fraction):
 
 def MoonTectonicsStub(dynamo_factor, tidal_factor, moon_mass_Me, moon_type):
     """Activity assessment without plate generation. Used for small moons only."""
+    ts = Model["tectonics_stub"]
     if moon_type == "icy_moon":
-        activity_score = dynamo_factor * 0.3 + tidal_factor * 0.7
+        activity_score = dynamo_factor * ts["icy_dynamo_weight"] + tidal_factor * ts["icy_tidal_weight"]
     else:
-        activity_score = dynamo_factor * 0.6 + tidal_factor * 0.4 + min(moon_mass_Me, 0.5) * 0.2
+        activity_score = dynamo_factor * ts["rocky_dynamo_weight"] + tidal_factor * ts["rocky_tidal_weight"] + min(moon_mass_Me, ts["rocky_mass_cap"]) * ts["rocky_mass_weight"]
 
-    if activity_score >= 0.5:
+    if activity_score >= ts["active_min"]:
         activity = "Active"
-    elif activity_score >= 0.25:
+    elif activity_score >= ts["dormant_min"]:
         activity = "Dormant"
     else:
         activity = "Dead"
 
-    volcanic_score = dynamo_factor * 0.4 + tidal_factor * 0.6
-    if volcanic_score >= 0.6:
+    volcanic_score = dynamo_factor * ts["volcanic_dynamo_weight"] + tidal_factor * ts["volcanic_tidal_weight"]
+    if volcanic_score >= ts["volcanic_high_min"]:
         volcanic = "High"
-    elif volcanic_score >= 0.35:
+    elif volcanic_score >= ts["volcanic_moderate_min"]:
         volcanic = "Moderate"
-    elif volcanic_score >= 0.15:
+    elif volcanic_score >= ts["volcanic_low_min"]:
         volcanic = "Low"
     else:
         volcanic = "None"
 
-    subsurface_ocean = moon_type == "icy_moon" and tidal_factor >= 0.2
+    subsurface_ocean = moon_type == "icy_moon" and tidal_factor >= ts["subsurface_ocean_min_tidal"]
 
     return {
         "Tectonic_Activity": {"value": activity},
@@ -285,7 +292,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
                  tidal_params, Habitability_Data, star_zones, parent_name,
                  Planet_Data):
     """Generates a single moon. Branches into full planetary pipeline for
-    moons >= PLANETARY_MASS_THRESHOLD, simplified pipeline for smaller moons."""
+    moons >= Model_Data moons.planetary_threshold, simplified pipeline for smaller moons."""
 
     from .planetary import (BodyMassGeneration, BodyRadiusGeneration,
                              BodyVolumeCalculation, BodyDensityCalculation,
@@ -296,6 +303,10 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
     from .tectonics import BodyTectonics
 
     moon_name = parent_name + "-M" + str(moon_index + 1)
+    # Moon-specific seed key for the planetary-pipeline calls below. Passing the bare
+    # key + parent index cloned the parent's core/radius/plates into every large moon.
+    # Trailing "-" keeps moon 1 of body 12 distinct from moon 11 of body 2.
+    moon_key  = key + "moon" + str(moon_index) + "-"
 
     # --- Shared: mass, tidal params, orbital mechanics ---
     moon_mass   = MoonMassGeneration(key, parent_mass_Me, parent_subclass, index, moon_index)
@@ -304,7 +315,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
     orbital_speed_kms  = MoonOrbitalSpeed(moon_sma_m, parent_mass_Me)
     moon_star_sma_AU   = parent_sma_AU  # approximation: moon << parent orbit
 
-    params  = tidal_params.get(moon_type, tidal_params.get("rocky_moon", {"k2": 0.3, "Q_min": 10, "Q_max": 500}))
+    params  = tidal_params[moon_type]
     random.seed(key + str(index) + "moonQ" + str(moon_index))
     Q_val   = random.uniform(params["Q_min"], params["Q_max"])
     k2_val  = params["k2"]
@@ -320,18 +331,19 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
     # -----------------------------------------------------------------------
     # BRANCH A: Full planetary pipeline (>= 0.5 Me)
     # -----------------------------------------------------------------------
-    if moon_mass >= PLANETARY_MASS_THRESHOLD:
+    planetary_threshold = Model["planetary_threshold"]
+    if moon_mass >= planetary_threshold:
 
         # Determine rocky subclass
         from .moons import _assign_rocky_subclass_inline
         moon_subclass, moon_subclass_data = _assign_rocky_subclass_inline(moon_mass, Planet_Data)
 
         # Full planetary physical properties
-        moon_radius   = BodyRadiusGeneration(key, moon_mass, "rocky", index, moon_subclass)
+        moon_radius   = BodyRadiusGeneration(moon_key, moon_mass, "rocky", index, moon_subclass, moon_subclass_data)
         moon_volume   = BodyVolumeCalculation(moon_radius)
         moon_density  = BodyDensityCalculation(moon_mass, moon_volume)
         moon_gravity  = BodySurfaceGravity(moon_mass, moon_radius)
-        _, moon_core  = BodyCoreCaluclation(key, star_metallicity, "rocky", moon_mass, index)
+        _, moon_core  = BodyCoreCaluclation(moon_key, star_metallicity, "rocky", moon_mass, index)
         moon_dynamo   = moon_core["Dynamo_Factor"]["value"]
 
         # Tidal heating using full radius
@@ -343,7 +355,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
 
         # Full atmosphere with tidal flux — moon-specific seed to avoid AMF collision with parent
         moon_atmo = BodyAtmospherics(
-            key, moon_dynamo, moon_gravity, moon_radius,
+            moon_key, moon_dynamo, moon_gravity, moon_radius,
             star_r, star_t, moon_star_sma_AU, star_lo,
             "rocky", moon_mass, index,
             Body_Subclass=moon_subclass, Subclass_Data=moon_subclass_data,
@@ -356,7 +368,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
 
         # Full tectonics
         moon_tectonics = BodyTectonics(
-            key, "rocky", moon_mass, moon_radius, moon_gravity,
+            moon_key, "rocky", moon_mass, moon_radius, moon_gravity,
             moon_dynamo,
             # Rotational period — draw from orbital mechanics stub
             orbital_period_hrs,
@@ -371,7 +383,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
         if tidal_factor > 0:
             upgrade = {"None": "Low", "Low": "Moderate", "Moderate": "High", "High": "High"}
             current = moon_tectonics.get("Volcanic_Activity", {}).get("value", "None")
-            if current in upgrade and tidal_factor >= 0.3:
+            if current in upgrade and tidal_factor >= Model["large_moon_volcanic_upgrade_min"]:
                 moon_tectonics["Volcanic_Activity"]["value"] = upgrade[current]
 
         # Add subsurface ocean flag (not generated by BodyTectonics)
@@ -438,7 +450,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
     tidal_factor = MoonTidalVolcanicFactor(tidal_flux_Wm2)
 
     # Tidal atmosphere gate — may elevate effective dynamo for outgassing
-    effective_dynamo = MoonTidalAtmosphereGate(moon_dynamo, tidal_flux_Wm2, moon_mass)
+    effective_dynamo = MoonTidalAtmosphereGate(moon_dynamo, tidal_flux_Wm2, moon_mass, planetary_threshold)
 
     moon_atmo = BodyAtmospherics(
         key, effective_dynamo, moon_gravity, moon_radius,
@@ -453,7 +465,7 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
 
     ocean_coverage = 0.0
     if moon_atmo.get("Composition") and moon_tectonics["Subsurface_Ocean"]["value"]:
-        ocean_coverage = 0.05
+        ocean_coverage = Model["small_moon_ocean_coverage"]
 
     sp = moon_atmo["Surface_Pressure"]["value"]
     sp_numeric = sp if isinstance(sp, (int, float)) else 0
@@ -534,9 +546,9 @@ def GenerateMoons(key, index, body_type, body_subclass, subclass_data,
     if n_candidates == 0:
         return [], {"present": False, "roche_failures": 0}, 0.0
 
-    rocky_params      = tidal_params.get("rocky_moon", {"density_mean": 3.5})
+    rocky_params      = tidal_params["rocky_moon"]
     body_density_kgm3 = body_density_kgkm3 / 1e9
-    moon_density_kgm3 = rocky_params.get("density_mean", 3.5) * 1000  # g/cm³ → kg/m³
+    moon_density_kgm3 = rocky_params["density_mean"] * 1000  # g/cm³ → kg/m³
 
     roche_m, stable_max_m = MoonStableZone(
         body_radius_Re,
@@ -549,7 +561,7 @@ def GenerateMoons(key, index, body_type, body_subclass, subclass_data,
         return [], {"present": True, "roche_failures": n_candidates}, roche_m
 
     random.seed(key + str(index) + "moonsma")
-    sma_min_m = roche_m * 0.6
+    sma_min_m = roche_m * Model["placement"]["roche_fraction_min"]
     sma_max_m = stable_max_m
     raw_smas  = sorted([
         10 ** random.uniform(math.log10(sma_min_m), math.log10(sma_max_m))

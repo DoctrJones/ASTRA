@@ -1,5 +1,12 @@
 {
     "_comment": "Habitability scoring parameters and biochemistry type definitions. Weights are multiplied (product), not summed - any zero kills the score.",
+    "_comment_scoring_shape": "Shape of every range subscore and of the gas score. Inside the optimal band the score is a gaussian whose half-width = optimal_half_width_sigmas x sigma; a zero-width band uses zero_width_fraction of the viable range. A required gas scores frac / (frac + gas_saturation_fraction); an optional (min_fraction 0) gas that is absent earns absent_optional_gas_credit of its weight.",
+    "scoring_shape": {
+        "optimal_half_width_sigmas": 0.5,
+        "zero_width_fraction": 0.1,
+        "gas_saturation_fraction": 0.05,
+        "absent_optional_gas_credit": 0.3
+    },
     "scoring": {
         "_comment": "Each subscore maps an input value to 0.0-1.0. optimal_min/max = score 1.0, viable_min/max = score tapers to 0.0, outside viable = 0.0",
         "temperature": {

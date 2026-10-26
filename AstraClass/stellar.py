@@ -2,25 +2,28 @@ import json, random, math
 
 with open("Star_Data.json", "r") as f:
     Star_Data = json.load(f)
+with open("Model_Data.json", "r") as f:
+    Model = json.load(f)["stellar"]
 
 def StellarClass(key):
     random.seed(key)
     Star_Classes = ["O", "B", "A", "F", "G", "K", "M"]
-    Class_Probabilities = [0.00003, 0.12, 0.61, 3.0, 7.6, 12.0, 76.0]
+    Class_Probabilities = [Star_Data[c][0]["percent"] for c in Star_Classes]
     total = sum(Class_Probabilities)
     weights = [p / total for p in Class_Probabilities]
     Star_Class = random.choices(Star_Classes, weights=weights, k=1)[0]
     return Star_Class
 
 def GalaxyPosition(key):
-    random.seed(key)
-    Star_Position_X = random.randint(1, 100)
-    Star_Position_Y = random.randint(1, 100)
-    Star_Position_Z = random.randint(1, 100)
+    random.seed(key + "position")
+    lo, hi = Model["galaxy_position_range"]
+    Star_Position_X = random.randint(lo, hi)
+    Star_Position_Y = random.randint(lo, hi)
+    Star_Position_Z = random.randint(lo, hi)
     return Star_Position_X, Star_Position_Y, Star_Position_Z
 
 def StellarSphereOfInfluence(Star_Mo):
-    Star_SOI = round(40 * Star_Mo, 3)
+    Star_SOI = round(Model["soi_au_per_solar_mass"] * Star_Mo, 3)
     return Star_SOI
 
 def StellarSpectralType(Star_Temperature, Star_Class):
@@ -37,7 +40,7 @@ def StellarSpectralType(Star_Temperature, Star_Class):
 
 def StellarMetallicity(Star_Class, key):
     Star_Info = Star_Data[Star_Class][0]
-    random.seed(key)
+    random.seed(key + "metallicity")
     FeH_Min = Star_Info['feh_min']
     FeH_Max = Star_Info['feh_max']
     FeH_Mean = Star_Info['feh_mean']
@@ -63,20 +66,22 @@ def StellarGoldilocksBoundary(Radius_Star, Temperature_Star, Irradiance_Max, Irr
     return [Goldilocks_Min, Goldilocks_Max]
 
 def StellarIceLine(Star_Lo):
-    return round(2.7 * math.sqrt(Star_Lo), 3)
+    return round(Model["ice_line_coefficient"] * math.sqrt(Star_Lo), 3)
+
+def StellarIceLineZone(Star_Lo, zone):
+    """Zone [min, max] in AU as multiples of the ice line (Model_Data stellar.zones)."""
+    Star_IceLine = StellarIceLine(Star_Lo)
+    lo, hi = Model["zones"][zone]
+    return [round(lo * Star_IceLine, 3), round(hi * Star_IceLine, 3)]
 
 def StellarRockyZone(Star_Lo):
-    Star_IceLine = StellarIceLine(Star_Lo)
-    return [round(0.1 * Star_IceLine, 3), round(0.5 * Star_IceLine, 3)]
+    return StellarIceLineZone(Star_Lo, "rocky")
 
 def StellarInnerBelt(Star_Lo):
-    Star_IceLine = StellarIceLine(Star_Lo)
-    return [round(0.5 * Star_IceLine, 3), round(0.9 * Star_IceLine, 3)]
+    return StellarIceLineZone(Star_Lo, "inner_belt")
 
 def StellarGiantZone(Star_Lo):
-    Star_IceLine = StellarIceLine(Star_Lo)
-    return [round(1.1 * Star_IceLine, 3), round(3.5 * Star_IceLine, 3)]
+    return StellarIceLineZone(Star_Lo, "giant")
 
 def StellarOuterBelt(Star_Lo):
-    Star_IceLine = StellarIceLine(Star_Lo)
-    return [round(4 * Star_IceLine, 3), round(10 * Star_IceLine, 3)]
+    return StellarIceLineZone(Star_Lo, "outer_belt")
