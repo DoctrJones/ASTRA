@@ -1,4 +1,5 @@
 import json
+from AstraClass.config import project_path
 
 def print_system(system):
     """Prints a human-readable summary of a generated system to the console."""
@@ -105,7 +106,7 @@ def print_system(system):
 def save_system(system, formatted):
     """Writes the formatted system dict to a JSON file in the Generated Systems folder."""
     import os
-    output_dir = "Generated Systems"
+    output_dir = project_path("Generated Systems")
     os.makedirs(output_dir, exist_ok=True)
     filename = os.path.join(output_dir, system["star"]["name"] + ".json")
     with open(filename, "w") as f:

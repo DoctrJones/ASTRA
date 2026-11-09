@@ -1,7 +1,10 @@
 import json, random, math
+from .config import project_path
 
-with open("Star_Data.json", "r") as f:
+with open(project_path("Star_Data.json"), "r") as f:
     Star_Data = json.load(f)
+with open(project_path("Model_Data.json"), "r") as f:
+    Model = json.load(f)["system"]
 
 def PoissonSample(key, lamb):
     random.seed(key)
@@ -21,24 +24,28 @@ def Sigmoid(z):
 
 def BodyCountLambda(Star_Class, Star_Metallicity):
     BaseRate = Star_Data[Star_Class][0]['lambda']
-    FeH_Multiplier = 1.0 + 0.5 * max(min(Star_Metallicity, 1.0), -1.0)
+    params = Model["body_count"]
+    clamp = params["metallicity_clamp"]
+    FeH_Multiplier = 1.0 + params["metallicity_multiplier"] * max(min(Star_Metallicity, clamp), -clamp)
     return BaseRate * FeH_Multiplier
 
 def BodyGiantProbability(Star_Metallicity, Star_Mo):
-    k = 6.0
-    x0 = -0.1
+    params = Model["giant_probability"]
+    k = params["k"]
+    x0 = params["x0"]
     z = k * (Star_Metallicity - x0)
     p = Sigmoid(z)
     if Star_Mo is not None:
-        p *= (1.0 + 0.1 * (max(Star_Mo - 1.0, 0.0)))
-    return max(0.0, min(0.95, p))
+        p *= (1.0 + params["star_mass_boost"] * (max(Star_Mo - 1.0, 0.0)))
+    return max(0.0, min(params["max"], p))
 
 def BodyZoneDistribution(key, Star_Class, Star_Metallicity, Star_Mo, N):
     Star_Info = Star_Data[Star_Class][0]
-    random.seed(key)
+    random.seed(key + "zones")
     weights = Star_Info["zone_weights"]
-    rocky = weights["rocky"] * (1 + 0.3 * Star_Metallicity)
-    giant = weights["giant"] * (1 + 0.3 * Star_Metallicity)
+    boost = Model["zone_distribution"]["metallicity_boost"]
+    rocky = weights["rocky"] * (1 + boost * Star_Metallicity)
+    giant = weights["giant"] * (1 + boost * Star_Metallicity)
     Body_GiantProbability = BodyGiantProbability(Star_Metallicity, Star_Mo)
     giant *= Body_GiantProbability
     total = rocky + giant
@@ -57,14 +64,15 @@ def GenerateBeltPopulation(key, belt_tag, Star_Metallicity, Star_Mo, belt_zone, 
     has_giant: bool — whether the system has any giant bodies
     Returns (count, [sma_list])"""
     random.seed(key + suffix + belt_tag)
+    params = Model["belts"]
     # Base lambda by belt type
-    base_lambda = 3.0 if belt_tag == "inner" else 4.5
+    base_lambda = params["inner_lambda"] if belt_tag == "inner" else params["outer_lambda"]
     # Metallicity boost: more metals = more debris
-    feh_factor = 1.0 + 0.4 * max(min(Star_Metallicity, 1.0), -1.0)
+    feh_factor = 1.0 + params["metallicity_boost"] * max(min(Star_Metallicity, 1.0), -1.0)
     # Giant shepherding: giants increase belt population (captured/corralled debris)
-    giant_factor = 1.3 if has_giant else 1.0
+    giant_factor = params["giant_shepherding"] if has_giant else 1.0
     lamb = base_lambda * feh_factor * giant_factor
-    lamb = max(0.5, min(lamb, 8.0))
+    lamb = max(params["lambda_range"][0], min(lamb, params["lambda_range"][1]))
     # Poisson sample for count
     if lamb <= 0:
         return 0, []
@@ -79,8 +87,8 @@ def GenerateBeltPopulation(key, belt_tag, Star_Metallicity, Star_Mo, belt_zone, 
             break
     if count == 0:
         return 0, []
-    # Generate SMAs within belt bounds with minimum spacing of 0.01 AU
-    spacing = 0.01
+    # Generate SMAs within belt bounds with minimum spacing (Model_Data system.belts)
+    spacing = params["min_spacing_au"]
     belt_min, belt_max = belt_zone
     if belt_max - belt_min < spacing * count:
         count = max(1, int((belt_max - belt_min) / spacing))
@@ -105,71 +113,58 @@ def MutualHillRadius(sma_AU, m1_Me, m2_Me, star_Mo):
     M_star = star_Mo * Sol_Mass_kg
     return sma_AU * ((m1_kg + m2_kg) / (3 * M_star)) ** (1.0 / 3.0)
 
-def GladmanMinSeparation(sma_AU, m1_Me, m2_Me, star_Mo, k=3.5):
+def GladmanMinSeparation(sma_AU, m1_Me, m2_Me, star_Mo, k):
     """Minimum stable orbital separation using the Gladman (1993) criterion:
-    delta > k * R_mH  where k=3.5 and R_mH is the mutual Hill radius.
-    Rocky bodies use k=3.5. Giants use k=4.0 (see generator.py calls) to
-    account for the representative mass underestimating actual giant masses.
+    delta > k * R_mH  where R_mH is the mutual Hill radius.
+    k per body type is in Model_Data system.placement (giants use a larger k
+    to account for the representative mass underestimating actual giant masses).
     Returns minimum separation in AU."""
     return k * MutualHillRadius(sma_AU, m1_Me, m2_Me, star_Mo)
 
-def BodySMAPlacement(key, N, zone_min, zone_max, star_Mo, rep_mass_Me, body_type_tag, k=3.5):
+def BodySMAPlacement(key, N, zone_min, zone_max, star_Mo, rep_mass_Me, body_type_tag, k):
     """Places N bodies within [zone_min, zone_max] using Hill-radius-derived
     minimum separations (Gladman 1993).
 
     Uses a representative mass (rep_mass_Me) to estimate spacing before
-    individual body masses are known. Spacing is recalculated at each step
-    using the current SMA, so it correctly tightens near the star and widens
-    further out.
+    individual body masses are known.
+
+    The minimum separation is proportional to SMA, so neighbouring orbits need
+    a fixed minimum ratio (1 + gap), and the number of bodies that fit follows
+    exactly from zone_max / zone_min. Bodies are then placed inside-out, each
+    drawn uniformly between the previous body's minimum neighbour distance and
+    an upper limit that still leaves room for the bodies after it at minimum
+    spacing. Every body that fits is placed, and no pair is closer than the
+    Gladman limit.
 
     If N bodies cannot fit in the zone even at minimum spacing, count is
     reduced to the maximum that physically fits. Returns the final SMA list.
 
-    rep_mass_Me guidance:
-      rocky  bodies  →  1.5 Me   (conservative terrestrial),  k=3.5
-      giant  bodies  →  175.0 Me (conservative gas giant),    k=4.0
-      k=4.0 for giants adds margin for actual masses exceeding the representative.
+    rep_mass_Me and k per body type: Model_Data system.placement.
     """
-    if N <= 0:
+    if N <= 0 or zone_max <= zone_min:
         return []
 
     random.seed(key + body_type_tag)
 
-    # Step 1 — verify N bodies can fit; reduce if not
-    # Estimate total space needed by summing minimum separations from zone_min outward
-    test_sma  = zone_min
-    max_fit   = 0
-    for _ in range(N):
-        min_sep = GladmanMinSeparation(test_sma, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
-        if test_sma + min_sep > zone_max and max_fit == 0:
-            break
-        max_fit += 1
-        test_sma += min_sep
+    # Minimum ratio between neighbouring orbits: 1 + k * (mutual Hill radius / SMA)
+    ratio = 1.0 + GladmanMinSeparation(1.0, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
 
-    # Always place at least 1 body if the zone exists
-    N_actual = max(1, min(N, max_fit)) if zone_max > zone_min else 0
-    if N_actual == 0:
-        return []
+    # How many bodies fit at minimum spacing; always place at least 1
+    max_fit  = 1 + int(math.log(zone_max / zone_min) / math.log(ratio))
+    N_actual = max(1, min(N, max_fit))
 
-    # Step 2 — place bodies iteratively
-    # Each body is drawn randomly from [current_min, zone_max], then the next
-    # minimum is derived from that body's actual SMA.
     smas        = []
     current_min = zone_min
-
     for i in range(N_actual):
-        if current_min >= zone_max:
-            break
-
-        # Draw SMA randomly within remaining zone
-        sma = round(random.uniform(current_min, zone_max), 3)
+        # Highest SMA that still leaves room for the remaining bodies at minimum spacing
+        upper = zone_max / ratio ** (N_actual - 1 - i)
+        sma   = random.uniform(current_min, upper)
         smas.append(sma)
+        current_min = sma * ratio
 
-        # Derive next minimum from this body's actual SMA
-        min_sep     = GladmanMinSeparation(sma, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
-        current_min = round(sma + min_sep, 4)
-
-    return smas
+    # Round to 4 significant figures for small orbits (at least 3 decimals), so
+    # rounding can't eat the tiny gaps around low-mass stars.
+    return [round(a, max(3, 3 - math.floor(math.log10(a)))) for a in smas]
 
 def RandomNumberSet(key, N, min, max, S):
     """Legacy fixed-spacing SMA placement. Retained for belt population

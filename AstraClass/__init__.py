@@ -14,7 +14,7 @@ from .planetary import (
     BodyOrbitalMechanicsCaluclation
 )
 from .atmosphere import (
-    BodyEscapeVelocity, BodyThermalVelocity, BodyAtmosphereComposition,
+    BodyEscapeVelocity, BodyThermalVelocity, BodyGasRetention, BodyGeochemistry, BodyGasComposition,
     BodyAtmosphereMassFraction, BodyMeanMolecularWeight, BodySurfacePressureCalculation,
     BodyBareTemperature, BodyAlbedo, BodyGreenhouseFactor, BodyCorrectedTemperature,
     BodyAtmospherics, GAS_TABLE
@@ -77,7 +77,9 @@ class AstraFunctions:
     GAS_TABLE = GAS_TABLE
     BodyEscapeVelocity = staticmethod(BodyEscapeVelocity)
     BodyThermalVelocity = staticmethod(BodyThermalVelocity)
-    BodyAtmosphereComposition = staticmethod(BodyAtmosphereComposition)
+    BodyGasRetention = staticmethod(BodyGasRetention)
+    BodyGeochemistry = staticmethod(BodyGeochemistry)
+    BodyGasComposition = staticmethod(BodyGasComposition)
     BodyAtmosphereMassFraction = staticmethod(BodyAtmosphereMassFraction)
     BodyMeanMolecularWeight = staticmethod(BodyMeanMolecularWeight)
     BodySurfacePressureCalculation = staticmethod(BodySurfacePressureCalculation)

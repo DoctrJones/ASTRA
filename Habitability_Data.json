@@ -1,5 +1,13 @@
 {
     "_comment": "Habitability scoring parameters and biochemistry type definitions. Weights are multiplied (product), not summed - any zero kills the score.",
+    "_comment_scoring_shape": "Shape of every range subscore and of the gas score. Inside the optimal band the score is a gaussian whose half-width = optimal_half_width_sigmas x sigma; a zero-width band uses zero_width_fraction of the viable range. Gas scores are logarithmic, since trace gases matter at ppm levels: a required gas scores 0.5 at its min_fraction, rising to 1 at gas_full_credit_decades above it; an optional (min_fraction 0) gas is scored the same way against optional_reference_fraction, never below absent_optional_gas_credit, which is also what it earns when absent.",
+    "scoring_shape": {
+        "optimal_half_width_sigmas": 0.5,
+        "zero_width_fraction": 0.1,
+        "gas_full_credit_decades": 1.0,
+        "optional_reference_fraction": 0.0001,
+        "absent_optional_gas_credit": 0.3
+    },
     "scoring": {
         "_comment": "Each subscore maps an input value to 0.0-1.0. optimal_min/max = score 1.0, viable_min/max = score tapers to 0.0, outside viable = 0.0",
         "temperature": {
@@ -91,12 +99,12 @@
                     "role": "nitrogen fixation, amino acid synthesis"
                 },
                 "CO2": {
-                    "min_fraction": 0.001,
+                    "min_fraction": 0.0001,
                     "weight": 0.25,
                     "role": "carbon source for autotrophs"
                 },
                 "H2O": {
-                    "min_fraction": 0.005,
+                    "min_fraction": 0.002,
                     "weight": 0.3,
                     "role": "solvent, hydrological cycle"
                 },
@@ -278,7 +286,7 @@
                     "role": "carbon source for autotrophic fixation"
                 },
                 "H2O": {
-                    "min_fraction": 0.01,
+                    "min_fraction": 0.002,
                     "weight": 0.25,
                     "role": "solvent and hydrogen source"
                 },

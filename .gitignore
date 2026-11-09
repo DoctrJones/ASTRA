@@ -1,0 +1,18 @@
+# Python cache files, rebuilt automatically on every run
+__pycache__/
+*.py[cod]
+
+# ASTRA output folders, regenerated from keys
+Generated Systems/
+Reports/
+Search Results/
+*_heightmap.npy
+
+# Editor and OS clutter
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Word lock files (created while a document is open)
+~$*
