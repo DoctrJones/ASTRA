@@ -1,8 +1,9 @@
 import json, random, math
+from .config import project_path
 
-with open("Star_Data.json", "r") as f:
+with open(project_path("Star_Data.json"), "r") as f:
     Star_Data = json.load(f)
-with open("Model_Data.json", "r") as f:
+with open(project_path("Model_Data.json"), "r") as f:
     Model = json.load(f)["system"]
 
 def PoissonSample(key, lamb):
@@ -125,55 +126,45 @@ def BodySMAPlacement(key, N, zone_min, zone_max, star_Mo, rep_mass_Me, body_type
     minimum separations (Gladman 1993).
 
     Uses a representative mass (rep_mass_Me) to estimate spacing before
-    individual body masses are known. Spacing is recalculated at each step
-    using the current SMA, so it correctly tightens near the star and widens
-    further out.
+    individual body masses are known.
+
+    The minimum separation is proportional to SMA, so neighbouring orbits need
+    a fixed minimum ratio (1 + gap), and the number of bodies that fit follows
+    exactly from zone_max / zone_min. Bodies are then placed inside-out, each
+    drawn uniformly between the previous body's minimum neighbour distance and
+    an upper limit that still leaves room for the bodies after it at minimum
+    spacing. Every body that fits is placed, and no pair is closer than the
+    Gladman limit.
 
     If N bodies cannot fit in the zone even at minimum spacing, count is
     reduced to the maximum that physically fits. Returns the final SMA list.
 
     rep_mass_Me and k per body type: Model_Data system.placement.
     """
-    if N <= 0:
+    if N <= 0 or zone_max <= zone_min:
         return []
 
     random.seed(key + body_type_tag)
 
-    # Step 1 — verify N bodies can fit; reduce if not
-    # Estimate total space needed by summing minimum separations from zone_min outward
-    test_sma  = zone_min
-    max_fit   = 0
-    for _ in range(N):
-        min_sep = GladmanMinSeparation(test_sma, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
-        if test_sma + min_sep > zone_max and max_fit == 0:
-            break
-        max_fit += 1
-        test_sma += min_sep
+    # Minimum ratio between neighbouring orbits: 1 + k * (mutual Hill radius / SMA)
+    ratio = 1.0 + GladmanMinSeparation(1.0, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
 
-    # Always place at least 1 body if the zone exists
-    N_actual = max(1, min(N, max_fit)) if zone_max > zone_min else 0
-    if N_actual == 0:
-        return []
+    # How many bodies fit at minimum spacing; always place at least 1
+    max_fit  = 1 + int(math.log(zone_max / zone_min) / math.log(ratio))
+    N_actual = max(1, min(N, max_fit))
 
-    # Step 2 — place bodies iteratively
-    # Each body is drawn randomly from [current_min, zone_max], then the next
-    # minimum is derived from that body's actual SMA.
     smas        = []
     current_min = zone_min
-
     for i in range(N_actual):
-        if current_min >= zone_max:
-            break
-
-        # Draw SMA randomly within remaining zone
-        sma = round(random.uniform(current_min, zone_max), 3)
+        # Highest SMA that still leaves room for the remaining bodies at minimum spacing
+        upper = zone_max / ratio ** (N_actual - 1 - i)
+        sma   = random.uniform(current_min, upper)
         smas.append(sma)
+        current_min = sma * ratio
 
-        # Derive next minimum from this body's actual SMA
-        min_sep     = GladmanMinSeparation(sma, rep_mass_Me, rep_mass_Me, star_Mo, k=k)
-        current_min = round(sma + min_sep, 4)
-
-    return smas
+    # Round to 4 significant figures for small orbits (at least 3 decimals), so
+    # rounding can't eat the tiny gaps around low-mass stars.
+    return [round(a, max(3, 3 - math.floor(math.log10(a)))) for a in smas]
 
 def RandomNumberSet(key, N, min, max, S):
     """Legacy fixed-spacing SMA placement. Retained for belt population

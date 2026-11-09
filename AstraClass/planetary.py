@@ -1,6 +1,7 @@
 import json, random, math
+from .config import project_path
 
-with open("Model_Data.json", "r") as f:
+with open(project_path("Model_Data.json"), "r") as f:
     Model = json.load(f)["planetary"]
 
 def BodyMassGeneration(key, Star_BodyMassScale, Star_Mo, Star_Metallicity, Body_OrbitalZone, Body_Count, index, Body_Subclass=None, Subclass_Data=None, Mass_Range=None):

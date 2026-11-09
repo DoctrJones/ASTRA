@@ -3,6 +3,7 @@ import os
 import time
 from generator import generate_system
 from formatter import format_system
+from AstraClass.config import project_path
 
 # ── Search criteria ──────────────────────────────────────────────────────────
 # Add, remove, or set criteria here before running.
@@ -37,8 +38,8 @@ CRITERIA = {
 }
 
 # ── Search configuration ──────────────────────────────────────────────────────
-KEYS_FILE        = "search_keys.txt"   # One key per line
-OUTPUT_FOLDER    = "Search Results"
+KEYS_FILE        = project_path("search_keys.txt")   # One key per line
+OUTPUT_FOLDER    = project_path("Search Results")
 SEARCH_NAME      = "habitable_systems" # Subfolder name for this search run
 PRINT_NO_MATCH   = False               # Set True to print every key, not just matches
 

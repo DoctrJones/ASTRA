@@ -88,13 +88,7 @@
             "habitability_bias": 0.0,
             "placement_zone": "outer",
             "_comment_gas_table": "Weights are relative, not fractions. H2-dominant per real gas giant composition. Fixes He/H2 inversion bug.",
-            "gas_table_weights": {
-                "H2": 2.5,
-                "He": 0.8,
-                "CH4": 0.1,
-                "NH3": 0.08,
-                "H2O": 0.06
-            },
+            "gas_table_weights": {"H2": 0.86, "He": 0.136, "CH4": 0.003, "NH3": 0.0003, "H2O": 0.001},
             "_comment_dynamo": "Gas giants have deep metallic hydrogen layers driving strong dynamos.",
             "dynamo_range": [
                 1.8,
@@ -143,13 +137,7 @@
             "habitability_bias": 0.0,
             "placement_zone": "outer",
             "_comment_gas_table": "Ice giants are water/methane/ammonia mantle bodies with thin H2/He envelope. CH4 gives Uranus/Neptune blue-green color.",
-            "gas_table_weights": {
-                "H2": 0.4,
-                "He": 0.2,
-                "CH4": 0.6,
-                "NH3": 0.25,
-                "H2O": 0.5
-            },
+            "gas_table_weights": {"H2": 0.80, "He": 0.18, "CH4": 0.02, "NH3": 1e-05, "H2O": 1e-06},
             "_comment_dynamo": "Ice giants have weaker, less organised dynamos than gas giants \u2014 Uranus/Neptune both irregular.",
             "dynamo_range": [
                 1.2,

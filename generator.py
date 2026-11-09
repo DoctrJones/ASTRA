@@ -1,4 +1,5 @@
 import json, random, math
+from AstraClass.config import project_path
 from AstraClass import AstraFunctions
 from AstraClass.moons import GenerateMoons
 
@@ -172,7 +173,8 @@ def generate_body(key, index, Body_Type, Body_SMA, star, Habitability_Data, Plan
     Body_CoreMass, Body_CoreData = AstraFunctions.BodyCoreCaluclation(key, star["Star_Metallicity"], Body_Type, Body_Mass, index, Body_Subclass, Subclass_Data)
     Body_OrbitalData   = AstraFunctions.BodyOrbitalMechanicsCaluclation(star["Star_Mo"], Body_SMA, Body_Mass, Body_Radius, star["zones"])
     Body_SurfaceGravity = AstraFunctions.BodySurfaceGravity(Body_Mass, Body_Radius)
-    Body_AtmosphericData = AstraFunctions.BodyAtmospherics(key, Body_CoreData["Dynamo_Factor"]["value"], Body_SurfaceGravity, Body_Radius, star["Star_km"], star["Star_T"], Body_SMA, star["Star_Lo"], Body_Type, Body_Mass, index, Body_Subclass, Subclass_Data)
+    Body_AtmosphericData = AstraFunctions.BodyAtmospherics(key, Body_CoreData["Dynamo_Factor"]["value"], Body_SurfaceGravity, Body_Radius, star["Star_km"], star["Star_T"], Body_SMA, star["Star_Lo"], Body_Type, Body_Mass, index, Body_Subclass, Subclass_Data,
+                                                           Star_Metallicity=star["Star_Metallicity"], Star_IceLine=star["zones"]["Star_IceLine"])
     Body_Name          = star["name"] + "-" + str(index + 1)
 
     Surface_Pressure = Body_AtmosphericData["Surface_Pressure"]["value"]
@@ -186,7 +188,8 @@ def generate_body(key, index, Body_Type, Body_SMA, star, Habitability_Data, Plan
         Surface_Pressure_Numeric,
         Body_AtmosphericData["Has_Atmosphere"],
         Body_AtmosphericData["Composition"],
-        Body_SMA, Body_Name, index
+        Body_SMA, Body_Name, index,
+        Surface_Water=Body_AtmosphericData.get("Surface_Water")
     )
     # Super-Earth volcanic boost: nudge volcanic activity up one tier
     if Body_Subclass == "super_earth" and Subclass_Data is not None and Subclass_Data.get("volcanic_boost"):
@@ -260,7 +263,8 @@ def generate_dwarf(key, index, dwarf_type, dwarf_SMA, star, Habitability_Data, P
     Body_CoreMass, Body_CoreData = AstraFunctions.BodyCoreCaluclation(dwarf_key, star["Star_Metallicity"], dwarf_type, Body_Mass, index)
     Body_OrbitalData   = AstraFunctions.BodyOrbitalMechanicsCaluclation(star["Star_Mo"], dwarf_SMA, Body_Mass, Body_Radius, star["zones"])
     Body_SurfaceGravity = AstraFunctions.BodySurfaceGravity(Body_Mass, Body_Radius)
-    Body_AtmosphericData = AstraFunctions.BodyAtmospherics(dwarf_key, Body_CoreData["Dynamo_Factor"]["value"], Body_SurfaceGravity, Body_Radius, star["Star_km"], star["Star_T"], dwarf_SMA, star["Star_Lo"], dwarf_type, Body_Mass, index)
+    Body_AtmosphericData = AstraFunctions.BodyAtmospherics(dwarf_key, Body_CoreData["Dynamo_Factor"]["value"], Body_SurfaceGravity, Body_Radius, star["Star_km"], star["Star_T"], dwarf_SMA, star["Star_Lo"], dwarf_type, Body_Mass, index,
+                                                           Star_Metallicity=star["Star_Metallicity"], Star_IceLine=star["zones"]["Star_IceLine"])
     Body_Name          = star["name"] + "-" + belt_tag[0].upper() + "B-" + str(index + 1)
 
     Surface_Pressure = Body_AtmosphericData["Surface_Pressure"]["value"]
@@ -313,13 +317,13 @@ def generate_belt(key, belt_tag, dwarf_type, star, Habitability_Data, Planet_Dat
 def generate_system(key):
     """Master function: generates a complete star system for a given key.
     Returns a system dict containing star data, main bodies, and belt populations."""
-    with open("Star_Data.json", "r") as f:
+    with open(project_path("Star_Data.json"), "r") as f:
         Star_Data = json.load(f)
-    with open("Habitability_Data.json", "r") as f:
+    with open(project_path("Habitability_Data.json"), "r") as f:
         Habitability_Data = json.load(f)
-    with open("Planet_Data.json", "r") as f:
+    with open(project_path("Planet_Data.json"), "r") as f:
         Planet_Data = json.load(f)
-    with open("Model_Data.json", "r") as f:
+    with open(project_path("Model_Data.json"), "r") as f:
         Model_Data = json.load(f)
 
     star = generate_star(key, Star_Data, Habitability_Data, Model_Data)

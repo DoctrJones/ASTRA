@@ -1,8 +1,9 @@
 import json, random, math
+from .config import project_path
 
-with open("Star_Data.json", "r") as f:
+with open(project_path("Star_Data.json"), "r") as f:
     Star_Data = json.load(f)
-with open("Model_Data.json", "r") as f:
+with open(project_path("Model_Data.json"), "r") as f:
     Model = json.load(f)["stellar"]
 
 def StellarClass(key):

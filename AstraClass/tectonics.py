@@ -1,6 +1,7 @@
 import json, random, math
+from .config import project_path
 
-with open("Model_Data.json", "r") as f:
+with open(project_path("Model_Data.json"), "r") as f:
     Model = json.load(f)["tectonics"]
 
 def TectonicActivity(Dynamo_Factor, Body_Mass, Body_Type):
@@ -33,11 +34,19 @@ def TectonicMaxElevation(Body_SurfaceGravity):
 def TectonicMaxDepth(Max_Elevation):
     return round(-Max_Elevation * Model["relief"]["depth_ratio"], 2)
 
-def TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index):
+def TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index, Surface_Water=None):
+    """Fraction of the surface under liquid. With the atmosphere's Surface_Water state, water oceans
+    follow the water inventory (1 - exp(-k x oceans): Earth's one ocean covers ~71%) when liquid;
+    frozen or boiled-off oceans give none. Methane lakes still follow atmospheric CH4."""
     random.seed(key + str(index) + "ocean")
     oc = Model["ocean"]
     if Body_Type == "giant" or Atmo_Composition is None:
         return 0.0
+    if Surface_Water is not None:
+        if Surface_Water["State"] == "liquid":
+            coverage = (1 - math.exp(-oc["inventory_coverage_k"] * Surface_Water["Inventory_Oceans"])) * random.uniform(*oc["jitter"])
+            return round(max(oc["range"][0], min(coverage, oc["range"][1])), 3)
+        return _methane_lakes(Atmo_Composition, Surface_Temperature, oc)
     h2o_frac = 0.0
     for formula, data in Atmo_Composition.items():
         if formula == "H₂O":
@@ -52,11 +61,11 @@ def TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pr
             base_coverage = h2o_frac * temp_factor * oc["coverage_scale"]
             coverage = base_coverage * random.uniform(*oc["jitter"])
             return round(max(oc["range"][0], min(coverage, oc["range"][1])), 3)
-    ch4_frac = 0.0
-    for formula, data in Atmo_Composition.items():
-        if formula == "CH₄":
-            ch4_frac = data["value"]
-            break
+    return _methane_lakes(Atmo_Composition, Surface_Temperature, oc)
+
+def _methane_lakes(Atmo_Composition, Surface_Temperature, oc):
+    """Titan-style hydrocarbon lakes on cold methane-rich worlds."""
+    ch4_frac = Atmo_Composition.get("CH₄", {}).get("value", 0.0)
     meth = oc["methane"]
     if ch4_frac > meth["min_fraction"] and Surface_Temperature < meth["max_temperature_c"]:
         coverage = ch4_frac * random.uniform(*meth["jitter"])
@@ -276,13 +285,13 @@ def TectonicGenerateHeightmap(key, plates, boundaries, Max_Elevation, Max_Depth,
         nxy0 = nx00 + v * (nx10 - nx00); nxy1 = nx01 + v * (nx11 - nx01)
         heightmap += (nxy0 + w * (nxy1 - nxy0)) * amp * elevation_range
     heightmap = np.clip(heightmap, Max_Depth, Max_Elevation)
-    filepath = str(Body_Name) + "_heightmap.npy"
+    filepath = project_path(str(Body_Name) + "_heightmap.npy")
     np.save(filepath, heightmap)
     return heightmap, filepath
 
 def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, Dynamo_Factor,
                   Rotational_Period, Surface_Temperature, Surface_Pressure, Has_Atmosphere,
-                  Atmo_Composition, Body_SMA, Body_Name, index):
+                  Atmo_Composition, Body_SMA, Body_Name, index, Surface_Water=None):
     if Body_Type == "giant":
         return {
             "Tectonic_Activity": {"value": "None"},
@@ -293,7 +302,7 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
     if Activity == "Dead":
         Max_Elev = TectonicMaxElevation(Body_SurfaceGravity)
         Max_Dep = TectonicMaxDepth(Max_Elev)
-        Ocean = TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index)
+        Ocean = TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index, Surface_Water)
         return {
             "Tectonic_Activity": {"value": Activity},
             "Plate_Count": {"value": 1},
@@ -312,7 +321,7 @@ def BodyTectonics(key, Body_Type, Body_Mass, Body_Radius, Body_SurfaceGravity, D
         Plate_Count = max(Model["plates"]["range"][0], Plate_Count // Model["plates"]["dormant_divisor"])
     Max_Elev = TectonicMaxElevation(Body_SurfaceGravity)
     Max_Dep = TectonicMaxDepth(Max_Elev)
-    Ocean = TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index)
+    Ocean = TectonicOceanCoverage(key, Atmo_Composition, Surface_Temperature, Surface_Pressure, Body_Type, index, Surface_Water)
     Volcanic = TectonicVolcanicActivity(Dynamo_Factor, Body_Mass, Body_SMA)
     if Activity == "Dormant":
         downgrade = {"High": "Moderate", "Moderate": "Low", "Low": "None", "None": "None"}

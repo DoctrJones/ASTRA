@@ -89,34 +89,71 @@
         "equatorial_speed_range_kms": [0, 2]
     },
     "atmosphere": {
-        "_comment_gases": "Order matters (draws happen in this order). zones = body types that can hold the gas. abundance = base weight; albedo and greenhouse = per-gas contributions, weighted by fraction.",
+        "_comment_gases": "Order matters (escape draws happen in this order). zones = body types that can hold the gas (amounts come from geochemistry). condense = 1-atm boiling/frost point and latent heat, for Clausius-Clapeyron condensation caps (water is handled separately). dof = degrees of freedom (3 monatomic, 5 diatomic, 6 nonlinear, 7 CO2), sets the adiabat. ir_strength / ir_saturation_atm = infrared optical depth curve, see greenhouse.",
         "gases": [
-            {"name": "H2",  "formula": "H₂",  "mol_mass": 2.016,  "abundance": 10.0, "zones": ["giant"], "albedo": 0.40, "greenhouse": 0.0},
-            {"name": "He",  "formula": "He",       "mol_mass": 4.003,  "abundance": 8.0,  "zones": ["giant"], "albedo": 0.10, "greenhouse": 0.0},
-            {"name": "CH4", "formula": "CH₄", "mol_mass": 16.04,  "abundance": 1.5,  "zones": ["giant", "rocky", "icy_dwarf"], "albedo": 0.45, "greenhouse": 30.0},
-            {"name": "NH3", "formula": "NH₃", "mol_mass": 17.03,  "abundance": 1.0,  "zones": ["giant", "rocky"], "albedo": 0.50, "greenhouse": 8.0},
-            {"name": "H2O", "formula": "H₂O", "mol_mass": 18.015, "abundance": 2.0,  "zones": ["rocky", "giant"], "albedo": 0.65, "greenhouse": 3.5},
-            {"name": "N2",  "formula": "N₂",  "mol_mass": 28.014, "abundance": 4.0,  "zones": ["rocky", "rocky_dwarf", "icy_dwarf"], "albedo": 0.05, "greenhouse": 0.0},
-            {"name": "O2",  "formula": "O₂",  "mol_mass": 31.998, "abundance": 0.5,  "zones": ["rocky"], "albedo": 0.05, "greenhouse": 0.0},
-            {"name": "CO2", "formula": "CO₂", "mol_mass": 44.01,  "abundance": 3.0,  "zones": ["rocky", "rocky_dwarf", "icy_dwarf"], "albedo": 0.40, "greenhouse": 1.5},
-            {"name": "SO2", "formula": "SO₂", "mol_mass": 64.07,  "abundance": 0.8,  "zones": ["rocky", "rocky_dwarf"], "albedo": 0.55, "greenhouse": 0.5}
+            {"name": "H2", "formula": "H₂", "mol_mass": 2.016, "zones": ["giant", "rocky"], "dof": 5, "ir_strength": 0.0, "ir_saturation_atm": 1},
+            {"name": "He", "formula": "He", "mol_mass": 4.003, "zones": ["giant", "rocky"], "dof": 3, "ir_strength": 0.0, "ir_saturation_atm": 1},
+            {"name": "CH4", "formula": "CH₄", "mol_mass": 16.04, "zones": ["giant", "rocky", "icy_dwarf"], "dof": 6, "ir_strength": 0.02247, "ir_saturation_atm": 1.41e-06, "condense": {"boil_K": 111.7, "latent_kJ": 8.19}},
+            {"name": "NH3", "formula": "NH₃", "mol_mass": 17.03, "zones": ["giant", "rocky"], "dof": 6, "ir_strength": 0.7655, "ir_saturation_atm": 2e-05, "condense": {"boil_K": 239.8, "latent_kJ": 23.35}},
+            {"name": "H2O", "formula": "H₂O", "mol_mass": 18.015, "zones": ["rocky", "giant"], "dof": 6, "ir_strength": 0.4278, "ir_saturation_atm": 0.0004},
+            {"name": "N2", "formula": "N₂", "mol_mass": 28.014, "zones": ["rocky", "rocky_dwarf", "icy_dwarf"], "dof": 5, "ir_strength": 0.0, "ir_saturation_atm": 1, "condense": {"boil_K": 77.4, "latent_kJ": 5.57}},
+            {"name": "O2", "formula": "O₂", "mol_mass": 31.998, "zones": ["rocky"], "dof": 5, "ir_strength": 0.0, "ir_saturation_atm": 1, "condense": {"boil_K": 90.2, "latent_kJ": 6.82}},
+            {"name": "CO2", "formula": "CO₂", "mol_mass": 44.01, "zones": ["rocky", "rocky_dwarf", "icy_dwarf"], "dof": 7, "ir_strength": 0.126, "ir_saturation_atm": 1e-06, "condense": {"boil_K": 194.7, "latent_kJ": 25.2}},
+            {"name": "SO2", "formula": "SO₂", "mol_mass": 64.07, "zones": ["rocky", "rocky_dwarf"], "dof": 6, "ir_strength": 0.7644, "ir_saturation_atm": 3.98e-06, "condense": {"boil_K": 263.1, "latent_kJ": 24.9}},
+            {"name": "CO", "formula": "CO", "mol_mass": 28.01, "zones": ["rocky", "rocky_dwarf", "icy_dwarf"], "dof": 5, "ir_strength": 0.0, "ir_saturation_atm": 1, "condense": {"boil_K": 81.6, "latent_kJ": 6.04}},
+            {"name": "H2S", "formula": "H₂S", "mol_mass": 34.08, "zones": ["rocky", "rocky_dwarf"], "dof": 6, "ir_strength": 0.03846, "ir_saturation_atm": 3.98e-06, "condense": {"boil_K": 212.8, "latent_kJ": 18.7}}
         ],
         "_comment_jeans": "A gas is retained only if escape velocity >= jeans_factor x its thermal velocity.",
         "jeans_factor": 6.0,
         "_comment_stellar_stripping": "Inside sma_au, light gases (mol mass < light_gas_mol_mass) are stripped with chance max_chance x (1 - SMA / sma_au) x max(min_exposure, 1 - dynamo x dynamo_shielding).",
         "stellar_stripping": {"sma_au": 0.3, "max_chance": 0.7, "light_gas_mol_mass": 20.0, "dynamo_shielding": 0.5, "min_exposure": 0.1},
-        "_comment_composition": "Gas weights = abundance x abundance_jitter (giants: subclass weight x giant_weight_jitter). Cold/hot temperatures (K) scale CH4/NH3. A second gas above secondary_gas_label_min is named in the atmosphere type.",
+        "_comment_escape": "Jeans escape is judged at the exosphere temperature: max(bare temperature, exosphere_K_at_earth x (irradiance / earth_irradiance)^exosphere_irradiance_exponent). Earth ~1000 K (loses H2, He); Titan ~100 K (keeps N2).",
+        "escape": {"exosphere_K_at_earth": 1000.0, "earth_irradiance": 1361.0, "exosphere_irradiance_exponent": 0.5},
+        "_comment_composition": "Giants: subclass gas_table_weights (Planet_Data) x giant_weight_jitter for H2/He; heavy species x 10^(giant_metallicity_exponent x [Fe/H] + N(0, giant_heavy_scatter_dex)). A second gas above secondary_gas_label_min is named in the atmosphere type. Gases below trace_floor are dropped from the output.",
         "composition": {
-            "abundance_jitter": [0.5, 1.5],
             "giant_weight_jitter": [0.8, 1.2],
-            "legacy_giant_h2_he_boost": 3.0,
-            "rocky_n2_co2_base": 1.5,
-            "rocky_n2_co2_dynamo": 0.5,
-            "cold_below_k": 200,
-            "cold_ch4_nh3_factor": 2.0,
-            "hot_above_k": 500,
-            "hot_ch4_nh3_factor": 0.3,
-            "secondary_gas_label_min": 0.10
+            "giant_metallicity_exponent": 1.0,
+            "giant_heavy_scatter_dex": 0.15,
+            "secondary_gas_label_min": 0.10,
+            "trace_floor": 1e-9
+        },
+        "_comment_geochemistry": "Rocky worlds, dwarfs and moons: composition from volatile geochemistry (BodyGeochemistry / BodyGasComposition). Sources: N2 = N x nitrogen; carbon C x carbon x outgassing, split by mantle redox into CO2 (oxidised), CO and CH4 (reduced; CH4 when cool); H2 from water x hydrogen x reduced; sulfur S x sulfur x volcanism x tidal into SO2 / H2S by redox and pressure (Gaillard et al.); NH3 from N on reduced, cold worlds; trace abiotic O2. Sinks: weathering (CO2) and rainout (SO2, H2S, NH3) on liquid-water worlds, reduced gases destroyed in oxidising atmospheres (survival 10^(-reduced_gas_lifetime_dex x oxidised share); carbon goes to CO2, H2S to SO2), NH3 photolysis unless haze-shielded, condensation at each gas's frost point. Water vapour follows humidity at the surface temperature.",
+        "geochemistry": {
+            "_comment_c_to_o": "Nissen 2014: C/O = 0.58 at solar [Fe/H], +0.3 per dex, rms 0.06. Above carbon_rich_above (Bond et al. 2010) the world is carbon-rich; carbon inventory x (C/O / solar)^carbon_exponent.",
+            "c_to_o": {"solar": 0.58, "metallicity_slope": 0.3, "scatter": 0.06, "carbon_rich_above": 0.8, "carbon_exponent": 4.0},
+            "_comment_redox": "Mantle oxygen fugacity relative to the iron-wustite buffer (Earth ~ +3.5, Mars ~ +1, Mercury ~ -5). Outgassed carbon/hydrogen/sulfur is oxidised with weight 1 / (1 + exp(-(dIW - oxidised_mid_dIW) / oxidised_width_dIW)) (Ortenzi et al. 2020).",
+            "redox": {"mean_dIW": 2.0, "sigma_dIW": 1.8, "range": [-6.0, 5.0], "carbon_rich_shift": -3.0},
+            "_comment_pressure_per_unit_atm": "Surface pressure follows the gas budget. Each source unit (Earth-like N2 = 1) is this many atm on Earth, scaled by mass x (g / 9.81) / radius^2 (same inventory per kg of planet) and by retention. Venus-like dry worlds keep their carbon as tens of atm of CO2; ocean worlds weather it away.",
+            "pressure_per_unit_atm": 0.78,
+            "_comment_retention": "Share of the outgassed atmosphere still held: worlds with a strong dynamo (Thick class) 10^N(0, thick_sigma_dex); weak-dynamo worlds (Thin class) 10^uniform(thin_log_range), having lost most of theirs (Mars ~1%).",
+            "retention": {"thick_sigma_dex": 0.3, "thin_log_range": [-3.0, -1.0]},
+            "metallicity_exponent": 1.0,
+            "inventory_scatter_dex": 0.4,
+            "_comment_beyond_ice_line_nitrogen": "Bodies formed beyond the ice line accreted nitrogen as ammonia ice (the source of Titan's N2, ~80x Earth's atmosphere per unit mass): N inventory x this.",
+            "beyond_ice_line_nitrogen": 80.0,
+            "_comment_water": "Water inventory in Earth oceans (scaled by planet mass), log-normal around the inside/beyond ice line medians. Oceans exist above ocean_min_oceans; every condensable gas (not only water) uses the same column humidity profile for its condensation cap; water worlds (no exposed land) above waterworld_oceans. Vapour column mixing ratio = column_factor x relative_humidity x saturation / P (Earth: 0.4%), rising to full saturation in steam atmospheres. An ocean world absorbing more than runaway_flux (W/m2; Goldblatt et al. 2013, ~282) cannot keep liquid water: the whole ocean becomes a steam atmosphere and adds its pressure.",
+            "water": {"inside_ice_line_oceans": 0.5, "beyond_ice_line_oceans": 50.0, "scatter_dex": 0.8, "ocean_min_oceans": 0.05, "waterworld_oceans": 10.0,
+                      "earth_ocean_kg": 1.4e21, "relative_humidity": 0.77, "column_factor": 0.31, "max_fraction": 0.999, "steam_fraction": 0.1, "frozen_out_fraction": 0.1,
+                      "runaway_flux": 282.0},
+            "_comment_outgassing": "Outgassing = by_volcanism[tier] x mass factor (log-normal in mass, peaking at mass_peak_me; Ortenzi et al. 2020), plus a background for long-term accumulation. Tidal heating multiplies sulfur outgassing by 1 + flux / tidal_sulfur_flux and divides C, N and water by 1 + flux / tidal_depletion_flux (W/m2), so strongly heated moons are volatile-poor and sulfur-dominated (Io, ~2.5 W/m2).",
+            "outgassing": {"by_volcanism": {"None": 0.02, "Low": 0.3, "Moderate": 1.0, "High": 3.0}, "background": 0.1,
+                           "mass_peak_me": 3.0, "mass_width_ln": 1.2, "tidal_sulfur_flux": 0.02, "tidal_depletion_flux": 0.002},
+            "sources": {"nitrogen": 1.0, "carbon": 60.0, "sulfur": 0.005, "hydrogen": 0.5, "water_outgassed": 0.3, "oxygen_trace": 1e-05,
+                        "oxidised_mid_dIW": 0.5, "oxidised_width_dIW": 0.7,
+                        "methane_below_K": 450.0, "methane_width_K": 60.0,
+                        "ammonia_below_K": 250.0, "ammonia_width_K": 25.0, "ammonia_max_share": 0.3, "ammonia_photolysis": 0.01,
+                        "sulfur_pressure_atm": 10.0, "rainout": 1e-06, "icy_deposition": 0.001, "envelope_h2": 50.0, "envelope_he": 15.0,
+                        "reduced_gas_lifetime_dex": 4.0},
+            "_comment_rainout": "rainout: soluble SO2, H2S and NH3 last days on wet worlds versus ~Myr on dry ones (Earth SO2 ~ppb, Venus 150 ppm). icy_deposition: frozen ocean worlds remove them more slowly (deposition on ice, aerosols).",
+            "_comment_weathering": "Carbonate-silicate thermostat on liquid-water worlds (Walker, Hays & Kasting 1981): CO2 x min(1, at_reference^((T - frozen_K) / (reference_K - frozen_K))): no weathering at freezing, at_reference at reference_K, stronger above; water worlds x waterworld_factor (weak regulation without land). at_reference puts an Earth analogue near 400 ppm CO2.",
+            "weathering": {"at_reference": 6e-06, "reference_K": 288.0, "frozen_K": 273.15, "waterworld_factor": 100.0},
+            "_comment_primordial_envelope": "Chance a rocky world keeps a primordial H2/He envelope: logistic in log10(mass), 50% at half_mass_me. Only if H2/He survive escape.",
+            "primordial_envelope": {"half_mass_me": 6.0, "width_dex": 0.15},
+            "_comment_abiotic_oxygen": "M-dwarf ocean worlds may build abiotic O2 from water loss during the star's bright pre-main sequence (Luger & Barnes 2015; debated, Wordsworth et al. 2018). O2 source weight 10^uniform(log_weight_range).",
+            "abiotic_oxygen": {"star_below_K": 4000.0, "min_oceans": 0.3, "min_bare_K": 230.0, "chance": 0.1, "log_weight_range": [-1.0, 2.0]},
+            "_comment_climate_iterations": "Composition and surface temperature are iterated to agreement. Worlds formed inside the ice line start at least at start_K (hot after formation), icy bodies at the equilibrium temperature for start_albedo; damping halves whenever a step overshoots.",
+            "climate_iterations": {"max": 25, "damping": 0.6, "tolerance_K": 0.25, "start_albedo": 0.3, "start_K": 288.0},
+            "trait_thresholds": {"reduced_dIW": -1.0, "gas": 0.01, "sulfur": 0.001, "runaway_K": 400.0, "snowball_K": 263.0}
         },
         "_comment_classes": "Dynamo thresholds for a thick / thin atmosphere; exosphere_k sets exosphere height per class.",
         "classes": {
@@ -125,7 +162,7 @@
             "thick_exosphere_k": 1.5,
             "thin_exosphere_k": 0.5
         },
-        "_comment_mass_fraction": "Atmosphere mass fraction (AMF). Giants: uniform giant_range + giant_mass_boost x log10(max(M, giant_mass_floor)), capped at giant_max. Rocky: log-uniform in the class log range, shifted by gravity_shift x log10(g / 9.81), narrowed, then scaled by dynamo and mass and capped at max.",
+        "_comment_mass_fraction": "Giants only (rocky worlds take their pressure from the gas budget, see geochemistry). Atmosphere mass fraction: uniform giant_range + giant_mass_boost x log10(max(M, giant_mass_floor)), capped at giant_max. The rocky keys below are no longer used.",
         "mass_fraction": {
             "giant_range": [0.50, 0.95],
             "giant_mass_boost": 0.02,
@@ -144,9 +181,44 @@
             "mass_floor": 0.01,
             "max": 0.01
         },
-        "albedo": {"no_atmosphere": 0.12, "thick_multiplier": 1.4, "thin_multiplier": 0.6, "range": [0.05, 0.85]},
-        "_comment_greenhouse": "Temperature multiplier = min(max, 1 + coefficient x opacity x max(0, 1 + log10(max(pressure, pressure_floor)))).",
-        "greenhouse": {"coefficient": 0.12, "pressure_floor": 0.001, "max": 3.5}
+        "_comment_albedo": "Bond albedo = surface (rock, or ice_surface on an ocean world below ice_below_K) + rayleigh_max x (1 - exp(-P / rayleigh_scale_atm)) + water_clouds x min(1, H2O / water_cloud_ref_fraction) within water_cloud_K + sulfate_clouds x min(1, SO2 partial pressure / sulfate_ref_atm) x min(1, H2O partial pressure / sulfate_water_ref_atm) above sulfate_min_K (Venus-like columns), clamped to range; then an organic haze replaces it in proportion to the haze index (haze = Titan-like albedo). Earth ~0.30; giants fixed.",
+        "albedo": {"surface": 0.12, "ice_surface": 0.5, "ice_below_K": 263.0, "rayleigh_max": 0.3, "rayleigh_scale_atm": 10.0,
+                   "water_clouds": 0.15, "water_cloud_ref_fraction": 0.004, "water_cloud_K": [250.0, 400.0],
+                   "sulfate_clouds": 0.6, "sulfate_ref_atm": 0.01, "sulfate_water_ref_atm": 0.001, "sulfate_min_K": 230.0, "haze": 0.25, "giant": 0.35, "range": [0.05, 0.8]},
+        "_comment_greenhouse": "Robinson & Catling (2012) gray radiative-convective model, no shortwave absorption. Each gas adds infrared optical depth ir_strength x ln(1 + sqrt(u_eff / ir_saturation_atm)), with u_eff = fraction x P x (earth_gravity / g) x (P / 1 atm)^pressure_scaling (pressure-weighted column, atm). Square root at small amounts (methane today), logarithmic at large (CO2). Surface temperature follows from the total optical depth via the model's radiative-convective boundary. Calibrated to Earth: 288 K, +1.2 K per CO2 doubling, +0.5 K for today's methane, +3 K at 1% methane, +4.5 K for doubled N2 at fixed greenhouse gases (Goldblatt et al. 2009). NH3 and SO2: early Mars, 1 bar CO2 (Jorge, Wordsworth & Adams 2024): +11.1 / +17.7 K at 10 ppm, with 1 and 100 ppm fitted to their reported ranges. Collision-induced absorption: see cia. Starlight absorbed aloft (methane, haze): see shortwave.",
+        "greenhouse": {
+            "_comment_n": "Robinson & Catling power law tau = tau0 x (p / p0)^n inside the atmosphere. They fit Venus with n = 1 or 2; n = 1 fits Earth and Mars best here.",
+            "n": 1,
+            "_comment_diffusivity": "Two-stream diffusivity factor D.",
+            "diffusivity": 1.66,
+            "_comment_pressure_scaling": "Exponent m on the pressure weighting of absorber amounts (line broadening). Fit to +4.5 K for doubled N2 at fixed greenhouse gases (Goldblatt et al. 2009), after collision terms.",
+            "pressure_scaling": 0.4096,
+            "earth_gravity": 9.81,
+            "_comment_lapse_rate": "Robinson & Catling alpha: actual lapse rate / dry adiabat. Falls from dry to moist as the water fraction rises to moist_water_fraction (Earth ~0.004).",
+            "lapse_rate": {"dry": 0.8, "moist": 0.65, "moist_water_fraction": 0.004},
+            "_comment_giant_reference_pressure_atm": "Giants have no surface, so their temperature is evaluated at this pressure level (atm), the usual 1-bar convention.",
+            "giant_reference_pressure_atm": 1.0,
+            "_comment_cia": "Step 3, collision-induced absorption. Each pair adds strength x x_a x x_b x P(atm) x column(Earth-gravity atm) x (share of thermal emission at the equilibrium temperature inside bands_cm, wavenumbers cm^-1). Grows with pressure squared; the band share makes far-infrared pairs matter on cold worlds. Calibration targets in each pair's note.",
+            "cia": {
+                "pairs": [
+                    {"a": "CO2", "b": "CO2", "strength": 0.357, "bands_cm": [[0, 250], [1200, 1500]], "note": "Venus 737 K."},
+                    {"a": "N2",  "b": "N2",  "strength": 0.08215, "bands_cm": [[0, 350]], "note": "Titan greenhouse +21 K before haze (McKay et al. 1991), split evenly with CH4-N2 (the split is an estimate)."},
+                    {"a": "CH4", "b": "N2",  "strength": 1.363, "bands_cm": [[0, 650]], "note": "Titan, with N2-N2."},
+                    {"a": "H2",  "b": "N2",  "strength": 1.181, "bands_cm": [[0, 1200]], "note": "+2.5 K for 10% H2 at 1 bar N2 (Wordsworth & Pierrehumbert 2013)."},
+                    {"a": "H2",  "b": "H2",  "strength": 1.801, "bands_cm": [[0, 1200]], "note": "280 K under 7 bar H2 at 40 W/m2 (Pierrehumbert & Gaidos 2011)."},
+                    {"a": "H2O", "b": "H2O", "strength": 0.3631, "bands_cm": [[0, 2000]], "note": "Water self-continuum: a runaway steam atmosphere of one Earth ocean (~270 atm) reaches ~1500 K (Goldblatt et al. 2013)."},
+                    {"a": "H2",  "b": "He",  "strength": 0.9005, "bands_cm": [[0, 1200]], "note": "Half of H2-H2 (weaker per pair; Pierrehumbert & Gaidos 2011: 10% He adds <1 K)."}
+                ]
+            },
+            "_comment_shortwave": "Step 4. Calibration: methane alone neither warms nor cools at 10% around a 4500 K star (Ramirez & Kaltenegger 2018); methane warming peaks at CH4 = 0.1 x CO2 for a Sun-like star (Eager-Nash et al. 2023); haze max_fraction fit to Titan's 94 K. Check: CH4/CO2 = 0.3 haze cools an Archean Earth by ~17 K (Arney et al. 2016: ~20 K). Mechanism: starlight absorbed high in the atmosphere (anti-greenhouse, Robinson & Catling stellar channel absorbed at the top). Methane: methane_strength x (share of the star's light inside methane_band_um) x u_CH4 / (u_CH4 + methane_half_atm). Haze forms above onset_ratio of CH4/CO2: index = (1 - exp(-(ratio - onset_ratio) / ratio_scale)) x (1 - exp(-u_CH4 / methane_scale_atm)), absorbing max_fraction x index. Fractions combine as 1 - (1 - f_methane)(1 - f_haze).",
+            "shortwave": {
+                "methane_strength": 0.2987,
+                "methane_half_atm": 0.008525,
+                "methane_band_um": [1.1, 3.6],
+                "max_fraction": 0.95,
+                "haze": {"onset_ratio": 0.1, "ratio_scale": 0.1, "methane_scale_atm": 0.001, "max_fraction": 0.3578, "present_threshold": 0.1}
+            }
+        }
     },
     "tectonics": {
         "_comment_activity": "Score = dynamo x dynamo_weight + min(mass, mass_cap) x mass_weight.",
@@ -175,7 +247,9 @@
             "sea_level_depth_fraction": 0.15
         },
         "_comment_ocean": "Water oceans need H2O, pressure above min_pressure and a temperature between 0 C and boiling (base_c + per_decade_c x log10(pressure)). Otherwise cold methane seas are possible.",
+        "_comment_inventory_coverage_k": "Liquid ocean coverage = 1 - exp(-inventory_coverage_k x water inventory in Earth oceans) (Earth: one ocean, 71%). The h2o-fraction rule below is the fallback when no water state is given.",
         "ocean": {
+            "inventory_coverage_k": 1.24,
             "min_h2o_fraction": 0.01,
             "min_pressure": 0.006,
             "boiling_base_c": 100,

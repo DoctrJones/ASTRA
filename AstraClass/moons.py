@@ -1,6 +1,7 @@
 import json, random, math
+from .config import project_path
 
-with open("Model_Data.json", "r") as f:
+with open(project_path("Model_Data.json"), "r") as f:
     Model = json.load(f)["moons"]
 
 # ---------------------------------------------------------------------------
@@ -360,7 +361,8 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
             "rocky", moon_mass, index,
             Body_Subclass=moon_subclass, Subclass_Data=moon_subclass_data,
             Tidal_Heat_Flux=tidal_flux_Wm2,
-            seed_suffix="M" + str(moon_index)
+            seed_suffix="M" + str(moon_index),
+            Star_Metallicity=star_metallicity, Star_IceLine=star_zones["Star_IceLine"]
         )
 
         sp = moon_atmo["Surface_Pressure"]["value"]
@@ -376,7 +378,8 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
             sp_numeric,
             moon_atmo["Has_Atmosphere"],
             moon_atmo["Composition"],
-            moon_star_sma_AU, moon_name, index
+            moon_star_sma_AU, moon_name, index,
+            Surface_Water=moon_atmo.get("Surface_Water")
         )
 
         # Inject tidal volcanic boost into full tectonics output
@@ -458,7 +461,8 @@ def GenerateMoon(key, index, moon_index, moon_sma_m, moon_type, parent_mass_Me,
         "rocky", moon_mass, index,
         Body_Subclass=None, Subclass_Data=None,
         Tidal_Heat_Flux=tidal_flux_Wm2,
-        seed_suffix="M" + str(moon_index)
+        seed_suffix="M" + str(moon_index),
+        Star_Metallicity=star_metallicity, Star_IceLine=star_zones["Star_IceLine"]
     )
 
     moon_tectonics = MoonTectonicsStub(moon_dynamo, tidal_factor, moon_mass, moon_type)
